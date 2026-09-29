@@ -1,0 +1,36 @@
+{
+  "name": "linuxlearn",
+  "version": "1.0.0",
+  "description": "Simulador interactivo para aprender y practicar la linea de ordenes de Linux en el navegador (motor shell propio en JS, verificado contra bash real).",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "validate": "node scripts/validate-levels.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:bash": "node scripts/diff-bash.mjs"
+  },
+  "keywords": [
+    "linux",
+    "cli",
+    "bash",
+    "shell",
+    "simulador",
+    "terminal",
+    "educativo",
+    "wasm-free"
+  ],
+  "author": "notayeen",
+  "license": "ISC",
+  "dependencies": {
+    "sortablejs": "^1.15.7",
+    "vite": "^8.3.0"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.1",
+    "terser": "^5.49.0",
+    "vitest": "^5.0.1"
+  }
+}
