@@ -100,7 +100,10 @@ export function montarPanel(raiz, mision, opciones = {}) {
 
     if (conSeguimientoPropio) veredicto.hidden = true;
 
-    return { mision, zona, enganche };
+    // Se devuelve plano y con un nombre explicito: antes esto era
+    // `{ mision, zona, enganche }` y `main.js` leia el enganche un nivel mas
+    // arriba, con lo que la comprobacion automatica no llegaba a funcionar.
+    return { mision, zona, alComando: enganche.comandoEjecutado ?? null };
 }
 
 /**

@@ -34,7 +34,8 @@ body {
 
 .cabecera {
     display: flex;
-    align-items: baseline;
+    align-items: flex-start;
+    justify-content: space-between;
     gap: 16px;
     border-bottom: 1px solid var(--borde);
     padding-bottom: 12px;
@@ -43,6 +44,76 @@ body {
 
 .cabecera h1 { margin: 0; font-size: 26px; letter-spacing: -0.02em; }
 .lema { margin: 0; color: var(--tenue); font-size: 13px; }
+
+/* ---------- acciones de progreso ---------- */
+
+.acciones-zona {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+}
+
+.acciones-cabecera { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* El boton discreto no tira la mirada; el peligro solo se ve entero al
+   pulsarlo por primera vez, que es cuando el boton cambia de texto. */
+.boton.discreto,
+.boton.peligro {
+    font-size: 11px;
+    padding: 5px 10px;
+    color: var(--tenue);
+    background: transparent;
+    border-color: var(--borde);
+}
+
+.boton.discreto:hover,
+.boton.peligro:hover { color: var(--texto); border-color: var(--tenue); }
+
+.boton.confirmando {
+    color: var(--rojo);
+    border-color: var(--rojo);
+    background: rgba(248, 81, 73, 0.08);
+}
+
+.aviso-peligro,
+.aviso-acciones {
+    margin: 0;
+    font-size: 11px;
+    text-align: right;
+    color: var(--ambar);
+    max-width: 46ch;
+}
+
+.aviso-acciones.ok { color: var(--acento); }
+.aviso-acciones.error { color: var(--rojo); }
+.aviso-acciones.aviso { color: var(--ambar); }
+.aviso-acciones:empty { display: none; }
+
+.progreso-caja summary { color: var(--tenue); font-size: 11px; cursor: pointer; }
+.progreso-caja .pista { margin: 6px 0; text-align: right; }
+
+.caja-progreso {
+    width: min(46ch, 70vw);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 8px;
+    color: var(--texto);
+    background: #0d1117;
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+    resize: vertical;
+}
+
+.linea.aviso { color: var(--ambar); }
+
+@media (max-width: 720px) {
+    .cabecera { flex-direction: column; align-items: stretch; }
+    .acciones-zona { align-items: stretch; }
+    .acciones-cabecera { justify-content: flex-start; }
+    .aviso-peligro, .aviso-acciones { text-align: left; }
+    .caja-progreso { width: auto; }
+}
 
 /* ---------- disposicion ---------- */
 
@@ -86,8 +157,20 @@ body {
     overflow: auto;
 }
 
-.progreso { margin: 0 0 10px; color: var(--tenue); font-size: 12px; }
+.progreso { margin: 0 0 6px; color: var(--tenue); font-size: 12px; }
 .progreso strong { color: var(--acento); }
+.progreso .porcentaje { float: right; color: var(--tenue); }
+
+.barra-progreso {
+    height: 4px;
+    margin-bottom: 12px;
+    background: #0d1117;
+    border: 1px solid var(--borde);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.barra-progreso .relleno { height: 100%; background: var(--acento); transition: width 0.25s ease; }
 
 .misiones { list-style: none; margin: 0; padding: 0; counter-reset: none; }
 

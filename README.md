@@ -8,12 +8,12 @@ JavaScript: no hay backend, ni WebAssembly, ni Pty.js, ni un Linux embebido.
 - Cuatro modalidades: **Terminal**, **Depuración**, **Auditoría** y **Ensamblaje**.
 - Un sistema de ficheros virtual determinista, con permisos, enlaces simbólicos
   y usuarios, para que `chmod`, `find` o `tar` tengan consecuencias reales.
-- 52 comandos escritos a mano: `grep`, `sed`, `awk`, `find`, `sort`, `uniq`,
+- 53 comandos escritos a mano: `grep`, `sed`, `awk`, `find`, `sort`, `uniq`,
   `cut`, `tr`, `tar`, `ls`, `rm`… más los builtins del shell (`cd`, `export`,
   `set`, `trap`, funciones con `local`).
 - Errores con el mismo texto que produce Bash y las herramientas GNU.
 - Validación doble: reglas internas por misión y comparación diferencial
-  contra `bash` real en integración continua (80 guiones en verde).
+  contra `bash` real en integración continua (81 guiones en verde).
 
 ## Cómo se trabaja
 
@@ -24,8 +24,22 @@ ejecutas el comando, aunque escribas una forma equivalente (`cat notas.txt` en
 lugar del camino completo). While no acierta no te regaña —la terminal ya te
 ha enseñado el error real— y a partir del tercer intento te da una pista con la
 diferencia línea a línea. Al acertar aparece un botón para pasar a la siguiente
-misión. El historial (flechas), el TAB para completar, Ctrl-C y Ctrl-L
-funcionan igual que en bash.
+misión. El historial (flechas), el TAB para completar, Ctrl-C, Ctrl-L, `clear` e
+`history` funcionan igual que en bash.
+
+En la cabecera tienes lo que gobierna tu progreso:
+
+- **Reiniciar máquina** — deja el árbol de ficheros como estaba y vacía el
+  historial. Necesario porque hay misiones que cambian el sistema; así puedes
+  volver al punto de partida sin perder lo que has superado.
+- **Rehacer esta misión** — le quita la marca de superada para repetirla.
+- **Exportar / importar progreso** — copia el progreso como texto y pega uno
+  en otro dispositivo, por si borras los datos del navegador.
+- **Restablecer progreso** — borra todo, y por eso pide dos pulsaciones y
+  explica lo que va a pasar antes de hacerlo.
+
+Si el navegador no deja guardar (modo privado, almacenamiento lleno), te lo
+dice en vez de perder el progreso en silencio.
 
 ## Requisitos
 
@@ -36,7 +50,7 @@ npm install
 npm run dev      # servidor de desarrollo
 npm test         # tests del motor y de la interfaz
 npm run validate # comprueba la forma de las 32 misiones
-npm run test:bash # compara 80 guiones contra bash real
+npm run test:bash # compara 81 guiones contra bash real
 npm run build    # genera dist/
 npm run preview  # sirve dist/ tal cual se publicara
 ```
@@ -46,8 +60,8 @@ npm run preview  # sirve dist/ tal cual se publicara
 ```
 src/engine/     motor: lexico, parser, expansion, arith, builtins, coreutils, shell
 src/levels.js   definicion de las 32 misiones y sus comprobaciones
-src/check.js    evaluacion de soluciones y progreso del alumno
-src/ui/         interfaz: terminal y panel de misiones
+src/check.js    evaluacion de soluciones y progreso del alumno (unico que escribe en localStorage)
+src/ui/         interfaz: terminal, panel de misiones y barra de acciones
 src/main.js     monta la pagina
 scripts/        validacion de misiones y comparacion contra bash real
 tests/          tests unitarios, de interfaz y diferenciales

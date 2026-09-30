@@ -337,7 +337,8 @@ const evalBuiltin = {
     synopsis: 'eval [ARG]...',
     run(ctx, argv) {
         if (!argv.length) return 0;
-        const r = ctx.shell.ejecutarEnContexto(argv.join(' '), { nuevoAlcance: false });
+        // `eval` no deja su texto en el historial, igual que en bash.
+    const r = ctx.shell.ejecutarEnContexto(argv.join(' '), { nuevoAlcance: false, registrar: false });
         return r ? r.code : 0;
     }
 };

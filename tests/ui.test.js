@@ -8,7 +8,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { montarTerminal, crear } from '../src/ui/terminal.js';
 import { montarPanel, desordenar } from '../src/ui/panel.js';
-import { evaluar, leerProgreso, registrarSuperada, siguienteMision, guardarProgreso } from '../src/check.js';
+import { montarAcciones } from '../src/ui/acciones.js';
+import {
+    desmarcarMision, evaluar, exportarProgreso, guardarProgreso, importarProgreso,
+    leerProgreso, registrarSesion, registrarSuperada, restablecerProgreso,
+    siguienteMision, LIMITE_HISTORIAL
+} from '../src/check.js';
 import { NIVELES, misionPorId } from '../src/levels.js';
 
 /** `localStorage` de mentira: los tests no tocan el del navegador. */
@@ -78,6 +83,56 @@ describe('terminal', () => {
         tty.ejecutar();
         expect(tty.ultimoEstado.code).toBe(1);
     });
+
+    it('clear borra la pantalla en vez de pintar el numero raro', () => {
+        const tty = montarTerminal(raiz);
+        tty.escribir('echo hola');
+        tty.ejecutar();
+        expect(tty.texto()).toContain('hola');
+        tty.escribir('clear');
+        tty.ejecutar();
+        // La secuencia de escape se ha traducido, no se ha mostrado.
+        expect(tty.texto()).not.toContain('hola');
+        expect(tty.texto()).not.toContain('[2J');
+        // Y el prompt sigue en su sitio, listo para escribir.
+        expect(tty.texto()).not.toContain('Maquina');
+        tty.escribir('pwd');
+        tty.ejecutar();
+        expect(tty.texto()).toContain('/home/agente');
+    });
+
+    it('history muestra lo mismo que las flechas', () => {
+        const tty = montarTerminal(raiz);
+        tty.escribir('echo uno');
+        tty.ejecutar();
+        tty.escribir('history');
+        tty.ejecutar();
+        // Es el mismo historial: lo que sale por pantalla es lo que pondria la
+        // flecha arriba, no una lista distinta.
+        expect(tty.texto()).toContain('echo uno');
+        expect(tty.historial()).toEqual(['echo uno', 'history']);
+    });
+
+    it('reiniciar deja la maquina como estaba y avisa', () => {
+        const tty = montarTerminal(raiz);
+        // Cada sesion tiene su propio arbol, asi que se mira el de la del
+        // terminal. Con `node` en vez de con `ls` para no ensuciar el historial.
+        const existe = () => Boolean(tty.sesion.estado.fs.node('/tmp/prueba', { follow: false }));
+
+        tty.escribir('mkdir /tmp/prueba');
+        tty.ejecutar();
+        expect(existe()).toBe(true);
+        expect(tty.historial()).toEqual(['mkdir /tmp/prueba']);
+
+        tty.reiniciar([]);
+        // El arbol vuelve a su estado inicial: lo que se creo, fuera.
+        expect(existe()).toBe(false);
+        expect(tty.historial()).toEqual([]);
+        // El prompt tambien: la sesion nueva empieza en el directorio inicial.
+        tty.escribir('pwd');
+        tty.ejecutar();
+        expect(tty.texto()).toContain('/home/agente');
+    });
 });
 
 describe('panel de mision', () => {
@@ -99,14 +154,14 @@ describe('panel de mision', () => {
     it('la modalidad Terminal comprueba lo que se ejecuta en la terminal', () => {
         const mision = misionPorId(1);
         let superada = null;
-        const { enganche } = montarPanel(raiz, mision, { onSuperada: (id) => { superada = id; } });
+        const { alComando } = montarPanel(raiz, mision, { onSuperada: (id) => { superada = id; } });
 
         // Al abrir la mision el panel espera a que el alumno escriba.
         expect(raiz.querySelector('.seguimiento').textContent).toContain('terminal');
         // No hay textarea: el comando se escribe en la terminal, no en un cuadro.
         expect(raiz.querySelector('.campo-solucion')).toBeNull();
 
-        enganche.comandoEjecutado(mision.soluciones[0]);
+        alComando(mision.soluciones[0]);
         expect(raiz.querySelector('.seguimiento').className).toContain('ok');
         expect(superada).toBe(mision.id);
     });
@@ -114,9 +169,9 @@ describe('panel de mision', () => {
     it('detecta el acierto sin pulsar el boton', () => {
         const mision = NIVELES.find((m) => m.modo === 'Terminal');
         let superada = null;
-        const { enganche } = montarPanel(raiz, mision, { onSuperada: (id) => { superada = id; } });
+        const { alComando } = montarPanel(raiz, mision, { onSuperada: (id) => { superada = id; } });
         // Ni un clic: solo el comando escrito en la terminal.
-        enganche.comandoEjecutado(mision.soluciones[0]);
+        alComando(mision.soluciones[0]);
         expect(raiz.querySelector('.seguimiento').className).toContain('ok');
         expect(superada).toBe(mision.id);
     });
@@ -125,57 +180,57 @@ describe('panel de mision', () => {
         // Mision 3: `cat ~/proyecto/notas.txt` y `cat proyecto/notas.txt` dan lo
         // mismo, y los dos valen: lo que se comprueba es el contrato, no el texto.
         const mision = misionPorId(3);
-        const { enganche } = montarPanel(raiz, mision);
-        enganche.comandoEjecutado('cat proyecto/notas.txt');
+        const { alComando } = montarPanel(raiz, mision);
+        alComando('cat proyecto/notas.txt');
         expect(raiz.querySelector('.seguimiento').className).toContain('ok');
     });
 
     it('no regaña mientras el alumno prueba comandos', () => {
         const mision = misionPorId(1);
-        const { enganche } = montarPanel(raiz, mision);
-        enganche.comandoEjecutado('ls');
-        enganche.comandoEjecutado('ls -a');
+        const { alComando } = montarPanel(raiz, mision);
+        alComando('ls');
+        alComando('ls -a');
         // Todavia no dice nada: la terminal ya ha mostrado la salida.
         expect(raiz.querySelector('.seguimiento').className).toContain('esperando');
         // A partir del tercer intento si da una pista.
-        enganche.comandoEjecutado('ls -l /etc');
+        alComando('ls -l /etc');
         expect(raiz.querySelector('.seguimiento').textContent).toMatch(/Todavia no|llevo mal/);
     });
 
     it('una vez acertado no vuelve a comprobar', () => {
         const mision = misionPorId(1);
         let veces = 0;
-        const { enganche } = montarPanel(raiz, mision, { onSuperada: () => { veces++; } });
-        enganche.comandoEjecutado(mision.soluciones[0]);
-        enganche.comandoEjecutado('ls');
+        const { alComando } = montarPanel(raiz, mision, { onSuperada: () => { veces++; } });
+        alComando(mision.soluciones[0]);
+        alComando('ls');
         expect(veces).toBe(1);
     });
 
     it('un comando equivocado no pasa y explica la diferencia', () => {
         const mision = misionPorId(1);
-        const { enganche } = montarPanel(raiz, mision);
+        const { alComando } = montarPanel(raiz, mision);
         // Con tres intentos fallidos el panel ya da la diferencia.
-        for (let i = 0; i < 3; i++) enganche.comandoEjecutado('ls /tmp');
+        for (let i = 0; i < 3; i++) alComando('ls /tmp');
         expect(raiz.querySelector('.seguimiento').className).toContain('mal');
         expect(raiz.querySelector('.seguimiento').textContent).toMatch(/Todavia no/);
     });
 
     it('un comando que falla tampoco molesta: lo dice la terminal', () => {
         const mision = misionPorId(1);
-        const { enganche } = montarPanel(raiz, mision);
-        enganche.comandoEjecutado('ordeninventada');
+        const { alComando } = montarPanel(raiz, mision);
+        alComando('ordeninventada');
         // Con un solo intento el panel sigue callado; el error ya se ve abajo.
         expect(raiz.querySelector('.seguimiento').className).toContain('esperando');
         // Cuando el alumno insiste, se le distingue del "no has acertado".
-        for (let i = 0; i < 3; i++) enganche.comandoEjecutado('ordeninventada');
+        for (let i = 0; i < 3; i++) alComando('ordeninventada');
         expect(raiz.querySelector('.seguimiento').className).toContain('error');
     });
 
     it('el boton comprueba el ultimo comando escrito en la terminal', () => {
         const mision = misionPorId(1);
         const tty = montarTerminal(terminalRaiz, {});
-        const { enganche } = montarPanel(raiz, mision);
-        tty.alEjecutar = (guion) => enganche.comandoEjecutado(guion);
+        const { alComando } = montarPanel(raiz, mision);
+        tty.alEjecutar = (guion) => alComando(guion);
         tty.escribir('ls');
         tty.ejecutar();
         // Con un solo intento fallido el panel calla; el boton lo hace hablar.
@@ -186,8 +241,8 @@ describe('panel de mision', () => {
     it('al acertar ofrece pasar a la siguiente mision', () => {
         const mision = misionPorId(1);
         let pedidas = 0;
-        const { enganche } = montarPanel(raiz, mision, { siguienteMision: () => { pedidas++; } });
-        enganche.comandoEjecutado(mision.soluciones[0]);
+        const { alComando } = montarPanel(raiz, mision, { siguienteMision: () => { pedidas++; } });
+        alComando(mision.soluciones[0]);
         const boton = raiz.querySelector('.boton.siguiente');
         expect(boton).toBeTruthy();
         boton.click();
@@ -204,9 +259,9 @@ describe('panel de mision', () => {
     it('integracion: la terminal manda al panel lo que se ejecuta', () => {
         const mision = misionPorId(1);
         const tty = montarTerminal(terminalRaiz, {});
-        const { enganche } = montarPanel(raiz, mision);
+        const { alComando } = montarPanel(raiz, mision);
         // Asi es como lo conecta main.js.
-        tty.alEjecutar = (guion) => enganche.comandoEjecutado(guion);
+        tty.alEjecutar = (guion) => alComando(guion);
 
         tty.escribir('ls');
         tty.ejecutar();
@@ -306,9 +361,199 @@ describe('progreso', () => {
     });
 
     it('aguanta un almacenamiento roto', () => {
-        expect(leerProgreso({ getItem: () => '{no es json' })).toEqual({ misiones: {}, ultimo: null });
+        expect(leerProgreso({ getItem: () => '{no es json' })).toEqual({ misiones: {}, ultimo: null, historial: [] });
         expect(guardarProgreso(null, {})).toBe(true);
         expect(guardarProgreso({ setItem() { throw new Error('lleno'); } }, {})).toBe(false);
+    });
+
+    it('guarda el historial y lo restaura al recargar', () => {
+        const almacen = almacenFalso();
+        registrarSesion(almacen, 3, ['echo uno', 'ls /var']);
+        // Recargar la pagina: se vuelve a leer de almacenamiento y el historial
+        // sigue ahi. Antes se guardaba pero se descartaba al leer.
+        expect(leerProgreso(almacen).historial).toEqual(['echo uno', 'ls /var']);
+        expect(leerProgreso(almacen).ultimo).toBe(3);
+    });
+
+    it('el historial no crece sin limite', () => {
+        const almacen = almacenFalso();
+        const demasiados = Array.from({ length: LIMITE_HISTORIAL + 50 }, (_, i) => 'echo ' + i);
+        registrarSesion(almacen, 1, demasiados);
+        const guardado = leerProgreso(almacen).historial;
+        expect(guardado.length).toBe(LIMITE_HISTORIAL);
+        // Se queda con lo ultimo, que es lo que el alumno quiere recuperar.
+        expect(guardado[guardado.length - 1]).toBe('echo ' + (LIMITE_HISTORIAL + 49));
+    });
+
+    it('registrarSuperada no borra el resto del registro de la mision', () => {
+        const almacen = almacenFalso();
+        registrarSesion(almacen, 5, ['echo uno']);
+        registrarSuperada(almacen, 5);
+        const registro = leerProgreso(almacen).misiones[5];
+        expect(registro.superada).toBe(true);
+        expect(registro.abierta).toBe(true);
+        expect(registro.fecha).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('desmarcar una mision la deja pendiente otra vez', () => {
+        const almacen = almacenFalso();
+        registrarSuperada(almacen, 2);
+        desmarcarMision(almacen, 2);
+        expect(leerProgreso(almacen).misiones[2].superada).toBe(false);
+    });
+
+    it('exportar e importar deja el progreso igual', () => {
+        const almacen = almacenFalso();
+        registrarSesion(almacen, 1, ['echo uno']);
+        registrarSuperada(almacen, 1);
+        registrarSuperada(almacen, 2);
+        const texto = exportarProgreso(almacen);
+
+        // Otro dispositivo, otro almacenamiento.
+        const otro = almacenFalso();
+        const { progreso, error } = importarProgreso(texto);
+        expect(error).toBeUndefined();
+        guardarProgreso(otro, progreso);
+        expect(leerProgreso(otro)).toEqual(leerProgreso(almacen));
+    });
+
+    it('importar un texto que no es un progreso lo explica y no toca nada', () => {
+        const almacen = almacenFalso();
+        registrarSuperada(almacen, 1);
+        for (const texto of ['hola', '[1,2,3]', '"cadena"', '', '{}', 'null']) {
+            const { error } = importarProgreso(texto);
+            expect(error, texto).toMatch(/LinuxLearn|no contiene/);
+        }
+        // El progreso sigue ahi: un texto raro no lo borra.
+        expect(leerProgreso(almacen).misiones[1].superada).toBe(true);
+    });
+
+    it('importar descarta lo que no tiene forma de progreso', () => {
+        const { progreso } = importarProgreso(JSON.stringify({
+            misiones: { 1: { superada: true }, x: { superada: true }, 2: 'nope' },
+            ultimo: 'no es un numero',
+            historial: ['echo uno', 42, null]
+        }));
+        expect(progreso.misiones[1].superada).toBe(true);
+        expect(progreso.misiones.x).toBeUndefined();
+        expect(progreso.misiones['2']).toBeUndefined();
+        expect(progreso.ultimo).toBeNull();
+        expect(progreso.historial).toEqual(['echo uno']);
+    });
+
+    it('restablecer borra el progreso entero', () => {
+        const almacen = almacenFalso();
+        registrarSesion(almacen, 1, ['echo uno']);
+        registrarSuperada(almacen, 1);
+        expect(restablecerProgreso(almacen)).toBe(true);
+        expect(leerProgreso(almacen)).toEqual({ misiones: {}, ultimo: null, historial: [] });
+    });
+});
+
+describe('barra de acciones', () => {
+    let raiz;
+    let almacen;
+    let tty;
+    let acciones;
+    let cambios;
+
+    beforeEach(() => {
+        raiz = document.createElement('div');
+        document.body.append(raiz);
+        almacen = almacenFalso();
+        tty = montarTerminal(document.createElement('div'), {});
+        cambios = [];
+        acciones = montarAcciones(raiz, {
+            almacen,
+            tty,
+            idMision: 1,
+            alCambiarProgreso: (cambio) => { cambios.push(cambio ?? {}); }
+        });
+    });
+
+    it('explica el peligro antes de borrar nada', () => {
+        registrarSesion(almacen, 1, ['echo uno']);
+        const explicacion = raiz.querySelector('.aviso-peligro');
+        expect(explicacion.hidden).toBe(true);
+
+        // Una pulsacion: solo avisa.
+        acciones.botonRestablecer().click();
+        expect(explicacion.hidden).toBe(false);
+        expect(acciones.botonRestablecer().textContent).toMatch(/otra vez/);
+        expect(leerProgreso(almacen).historial).toEqual(['echo uno']);
+        expect(cambios.length).toBe(0);
+
+        // Dos: borra.
+        acciones.botonRestablecer().click();
+        expect(leerProgreso(almacen)).toEqual({ misiones: {}, ultimo: null, historial: [] });
+        expect(cambios).toEqual([{ restablecido: true }]);
+        expect(acciones.aviso()).toMatch(/borrado/i);
+    });
+
+    it('cancelar la confirmacion deja el progreso intacto', () => {
+        acciones.botonRestablecer().click();
+        acciones.cancelaConfirmacion();
+        expect(raiz.querySelector('.aviso-peligro').hidden).toBe(true);
+        acciones.botonRestablecer().click();
+        // Vuelve a preguntar: el primer clic ya no cuenta como el segundo.
+        expect(raiz.querySelector('.aviso-peligro').hidden).toBe(false);
+    });
+
+    it('reiniciar la maquina no toca el progreso', () => {
+        registrarSuperada(almacen, 1);
+        tty.escribir('mkdir /tmp/guara');
+        tty.ejecutar();
+        acciones.botonMaquina().click();
+        expect(leerProgreso(almacen).misiones[1].superada).toBe(true);
+        expect(tty.sesion.ejecutar('ls /tmp/guara').stdout).toBe('');
+    });
+
+    it('rehacer quita la marca de superada', () => {
+        registrarSuperada(almacen, 1);
+        acciones.sincroniza(1, true);
+        acciones.botonRehacer().click();
+        expect(leerProgreso(almacen).misiones[1].superada).toBe(false);
+        expect(acciones.aviso()).toMatch(/pendiente/i);
+    });
+
+    it('rehacer se esconde si la mision no esta superada', () => {
+        acciones.sincroniza(1, false);
+        expect(acciones.botonRehacer().hidden).toBe(true);
+    });
+
+    it('exportar genera el texto y lo deja a mano', () => {
+        registrarSuperada(almacen, 1);
+        acciones.botonExportar().click();
+        expect(acciones.caja().value).toBe(exportarProgreso(almacen));
+        expect(acciones.caja().hidden).toBe(false);
+    });
+
+    it('importar acepta un progreso valido y rechaza el que no lo es', () => {
+        registrarSesion(almacen, 1, ['echo uno']);
+        registrarSuperada(almacen, 1);
+        const texto = exportarProgreso(almacen);
+
+        acciones.caja().value = 'esto no vale';
+        acciones.botonConfirmarImportar().click();
+        expect(acciones.aviso()).toMatch(/No se ha importado/);
+
+        acciones.caja().value = texto;
+        acciones.botonConfirmarImportar().click();
+        expect(acciones.aviso()).toMatch(/1 misiones/);
+        expect(cambios).toEqual([{ importado: true }]);
+    });
+
+    it('avisa una vez si el navegador no deja guardar', () => {
+        const otros = montarAcciones(document.createElement('div'), { almacen: null, tty });
+        expect(otros.compruebaAlmacenamiento()).toBe(false);
+        expect(otros.aviso()).toMatch(/modo privado/);
+    });
+
+    it('avisa si el almacenamiento esta lleno y sigue funcionando', () => {
+        const lleno = { getItem: () => null, setItem() { throw new Error('quota'); } };
+        const otros = montarAcciones(document.createElement('div'), { almacen: lleno, tty });
+        expect(otros.compruebaAlmacenamiento()).toBe(false);
+        expect(otros.aviso()).toMatch(/no se esta guardando|no se est[aá] guardando/);
     });
 });
 

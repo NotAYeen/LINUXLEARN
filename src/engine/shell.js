@@ -148,7 +148,11 @@ function crearEstado(semilla, opciones) {
         alias: new Map(),
         traps: new Map(),
         posicionales: [],
-        historial: [],
+        // Historial inicial: al recargar la pagina el alumno debe ver lo mismo
+        // que veia, y `history` tiene que contar lo mismo que las flechas.
+        historial: Array.isArray(opciones.historial)
+            ? opciones.historial.filter((linea) => typeof linea === 'string')
+            : [],
         ifs: IFS_POR_DEFECTO,
         pasos: 0,
         profundidad: 0,
@@ -212,7 +216,7 @@ function crearEstado(semilla, opciones) {
 
         /** Ejecuta un texto en el ambito actual: `source`, `eval`, funciones. */
         fuente(texto, argumentos = []) {
-            return ejecutarGuion(this, texto, { nuevoAlcance: false, argumentos });
+            return ejecutarGuion(this, texto, { nuevoAlcance: false, argumentos, registrar: false });
         },
 
         /** Lanza una orden ya expandida: lo usan `xargs`, `find -exec` y `command`. */
@@ -227,7 +231,7 @@ function crearEstado(semilla, opciones) {
         },
 
         lanzarGuion(texto, argumentos = [], meta = {}) {
-            return ejecutarGuion(this, texto, { nuevoAlcance: true, argumentos, nombreGuion: meta.nombre });
+            return ejecutarGuion(this, texto, { nuevoAlcance: true, argumentos, nombreGuion: meta.nombre, registrar: false });
         },
 
         comandoExterno(nombre) {
@@ -255,7 +259,7 @@ function crearEstado(semilla, opciones) {
 
     // `~/.bashrc` es quien define los alias: se carga al arrancar, como en bash.
     try {
-        ejecutarGuion(estado, fs.readFile(home + '/.bashrc'), { nuevoAlcance: false, silencioso: true });
+        ejecutarGuion(estado, fs.readFile(home + '/.bashrc'), { nuevoAlcance: false, silencioso: true, registrar: false });
     } catch (e) { /* sin bashrc no pasa nada */ }
 
     return estado;
@@ -289,7 +293,12 @@ function ejecutarGuion(estado, guion, opciones) {
     estado.locals = [];
     estado.interrumpido = false;
 
-    if (opciones.registrar && guion.trim()) estado.historial.push(guion);
+    // El historial se lleva siempre, como en bash. Antes condicionaba a una opcion
+    // que nadie pasaba, asi que `history` salia vacio. Los guiones internos
+    // (funciones, tuberias, `bash -c`) no se registran: en bash tampoco cuentan.
+    if (opciones.registrar !== false && guion.trim()) {
+        estado.historial.push(guion);
+    }
 
     try {
         const ast = parseScript(guion);

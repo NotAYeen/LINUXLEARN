@@ -9,6 +9,7 @@ import bash from './bash.js';
 import cat from './cat.js';
 import chmod from './chmod.js';
 import chown from './chown.js';
+import clear from './clear.js';
 import cp from './cp.js';
 import cut from './cut.js';
 import date from './date.js';
@@ -54,7 +55,7 @@ import xargs from './xargs.js';
 import yes from './yes.js';
 
 export const COMANDOS = [
-    awk, bash, basename, cat, chmod, chown, cp, cut, date, dirname, echo, env,
+    awk, bash, basename, cat, chmod, chown, clear, cp, cut, date, dirname, echo, env,
     comandoFalse, file, find, grep, head, hostname, id, ln, ls, mkdir, mv, printenv,
     printf, pwd, readlink, realpath, rev, rm, rmdir, sed, seq, sleep, sort, stat, tail,
     tar, tee, test, touch, tr, comandoTrue, uniq, wc, which, whoami, xargs, yes

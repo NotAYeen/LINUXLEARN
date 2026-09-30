@@ -26,7 +26,10 @@ const TECLAS = {
  * @param {object} opciones  `{ onSalida, onEstado, historialInicial }`
  */
 export function montarTerminal(raiz, opciones = {}) {
-    const sesion = crearSesion();
+    // El historial vive en la sesion del motor (es el mismo que imprime el
+    // builtin `history`), asi que solo se le pasa el que habia antes.
+    const historialInicial = opciones.historialInicial ?? [];
+    let sesion = crearSesion({ historial: historialInicial });
 
     const pantalla = crear('div', { class: 'pantalla', role: 'log', 'aria-live': 'polite' });
     const lineaEntrada = crear('div', { class: 'linea-entrada' });
@@ -48,12 +51,11 @@ export function montarTerminal(raiz, opciones = {}) {
                 class: resultado.code === 0 ? 'ok' : 'error'
             }),
             crear('span', { class: 'pista-pie', text: '  ·  $? vuelve a dar ' + resultado.code }),
-            crear('span', { class: 'conteo', text: '  ·  ' + historial.length + ' comandos' })
+            crear('span', { class: 'conteo', text: '  ·  ' + sesion.historial.length + ' comandos' })
         );
     }
 
-    let historial = opciones.historialInicial ?? [];
-    let posicion = historial.length;
+    let posicion = sesion.historial.length;
     let editable = '';
     let ultimo = null;
     /** Enganche del panel de mision: recibe cada comando ejecutado. */
@@ -64,7 +66,7 @@ export function montarTerminal(raiz, opciones = {}) {
     /** Añade una linea a la pantalla. Nunca usa innerHTML. */
     function escribirLinea(texto, clase = '') {
         const linea = crear('div', { class: 'linea ' + clase });
-        linea.textContent = texto === '' ? ' ' : texto;
+        linea.textContent = texto === '' ? ' ' : texto;
         pantalla.append(linea);
         pantalla.scrollTop = pantalla.scrollHeight;
         return linea;
@@ -73,6 +75,15 @@ export function montarTerminal(raiz, opciones = {}) {
     function escribirBloque(texto, clase) {
         const lineas = String(texto).replace(/\n$/, '').split('\n');
         for (const linea of lineas) escribirLinea(linea, clase);
+    }
+
+    /**
+     * `clear` y Ctrl-L escriben una secuencia de escape, como en un bash de
+     * verdad. Aqui se traducen a "borra la pantalla" en vez de pintar el
+     * numero raro en pantalla.
+     */
+    function esSecuenciaDeEscape(texto) {
+        return /^(?:\x1b\[[0-9;]*[A-Za-z])+\s*$/.test(texto);
     }
 
     // ---- ejecucion --------------------------------------------------------
@@ -87,15 +98,17 @@ export function montarTerminal(raiz, opciones = {}) {
         const guion = campo.textContent.trim();
         editable = '';
         if (!guion) { pintarPrompt(); return null; }
-        historial.push(guion);
-        posicion = historial.length;
+        // El historial lo lleva la sesion: el motor lo registra al ejecutar
+        // (linea 292 de shell.js), asi que `history` y las flechas coinciden.
+        posicion = sesion.historial.length + 1;
         ultimo = guion;
         escribirLinea(sesion.prompt() + guion, 'entrada');
         campo.textContent = '';
         let resultado;
         try {
             resultado = sesion.ejecutar(guion);
-            if (resultado.stdout) escribirBloque(resultado.stdout, 'salida');
+            if (resultado.stdout && !esSecuenciaDeEscape(resultado.stdout)) escribirBloque(resultado.stdout, 'salida');
+            else if (resultado.stdout) pantalla.textContent = '';
             if (resultado.stderr) escribirBloque(resultado.stderr, 'error');
         } catch (e) {
             const texto = String(e.message ?? e);
@@ -146,9 +159,10 @@ export function montarTerminal(raiz, opciones = {}) {
 
     /** Flechas del historial. */
     function moverHistorial(delta) {
-        if (!historial.length) return;
-        posicion = Math.max(0, Math.min(historial.length, posicion + delta));
-        campo.textContent = posicion === historial.length ? '' : historial[posicion];
+        const total = sesion.historial.length;
+        if (!total) return;
+        posicion = Math.max(0, Math.min(total, posicion + delta));
+        campo.textContent = posicion === total ? '' : sesion.historial[posicion];
         editable = campo.textContent;
         moverCursorAlFinal();
     }
@@ -193,11 +207,11 @@ export function montarTerminal(raiz, opciones = {}) {
     pintarPrompt();
 
     return {
-        sesion,
+        get sesion() { return sesion; },
         /** El panel de la mision se engancha aqui para ver cada comando. */
         set alEjecutar(fn) { enganche = fn; },
         get alEjecutar() { return enganche; },
-        historial: () => historial,
+        historial: () => sesion.historial,
         ultimoComando: () => ultimo,
         ejecutar,
         /** Escribe texto como si el alumno lo hubiera tecleado. */
@@ -207,6 +221,25 @@ export function montarTerminal(raiz, opciones = {}) {
         },
         limpiar() {
             pantalla.textContent = '';
+        },
+        /**
+         * Devuelve la maquina a su estado inicial: arbol de ficheros original y
+         * sin historial. Es lo que necesita el boton "reiniciar maquina", porque
+         * hay misiones que dejan el sistema cambiado y las siguientes empiezan
+         * sobre esa base.
+         *
+         * @param {string[]} [historial]  historial a conservar, si se quiere
+         */
+        reiniciar(historial = []) {
+            sesion = crearSesion({ historial });
+            posicion = sesion.historial.length;
+            ultimo = null;
+            campo.textContent = '';
+            pantalla.textContent = '';
+            pintarPrompt();
+            actualizarEstado({ code: 0 });
+            opciones.onReinicio?.();
+            return sesion;
         },
         enfocar() {
             campo.focus();

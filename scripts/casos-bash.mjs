@@ -69,6 +69,8 @@ export const CASOS = [
     { nombre: 'seq separador', guion: 'seq -s, 1 3' },
     { nombre: 'seq ancho', guion: 'seq -w 8 10' },
     { nombre: 'yes con head', guion: 'yes | head -n 3' },
+    // Secuencia de escape comprobada con `clear | xxd` en el bash real.
+    { nombre: 'clear', guion: 'clear' },
     // El corte de bucles infinitos es propio del emulador (bash real se
     // quedaria colgado), asi que se prueba en tests/engine.test.js.
     // `tee f | cat f` es una carrera (cat puede abrir antes de que tee cree el

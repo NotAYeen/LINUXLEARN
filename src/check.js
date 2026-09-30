@@ -213,25 +213,65 @@ function normaliza(sesion, ruta) {
 
 // ---------------------------------------------------------------------------
 
-/** Progreso del alumno, con el prefijo `lxl_` que fija AGENTS.md. */
-const PREFIJO = 'lxl_';
+/**
+ * Progreso del alumno, con el prefijo `lxl_` que fija AGENTS.md.
+ *
+ * El progreso son tres cosas: que misiones estan superadas, cual era la ultima
+ * y el historial de la terminal. Las tres se guardan juntas y se leen con este
+ * modulo, que es el unico que escribe en `localStorage` (si no, el progreso se
+ * pierde en silencio cuando el navegador va justo).
+ */
 
-/** Lee el progreso de `localStorage`. Devuelve un objeto vacio si no hay. */
+const PREFIJO = 'lxl_';
+const CLAVE = PREFIJO + 'progreso';
+
+/**
+ * Cuantos comandos se recuerdan. Sin tope, un alumno que trasnoche acabaria
+ * con el almacenamiento lleno y perderia el progreso de verdad.
+ */
+export const LIMITE_HISTORIAL = 200;
+
+/** Progreso vacio, siempre con las tres claves. */
+export function progresoVacio() {
+    return { misiones: {}, ultimo: null, historial: [] };
+}
+
+/** Normaliza lo que llega de `localStorage`: si esta roto, se descarta. */
+function sanear(datos) {
+    if (!datos || typeof datos !== 'object') return progresoVacio();
+    const misiones = {};
+    for (const [id, registro] of Object.entries(datos.misiones ?? {})) {
+        if (!/^\d+$/.test(id) || !registro || typeof registro !== 'object') continue;
+        misiones[id] = {
+            abierta: registro.abierta === true,
+            superada: registro.superada === true,
+            fecha: typeof registro.fecha === 'string' ? registro.fecha : null
+        };
+    }
+    return {
+        misiones,
+        ultimo: Number.isInteger(datos.ultimo) ? datos.ultimo : null,
+        historial: Array.isArray(datos.historial)
+            ? datos.historial.filter((linea) => typeof linea === 'string').slice(-LIMITE_HISTORIAL)
+            : []
+    };
+}
+
+/** Lee el progreso de `localStorage`. Devuelve uno vacio si no hay o esta roto. */
 export function leerProgreso(almacen) {
     try {
-        const texto = almacen?.getItem(PREFIJO + 'progreso');
-        if (!texto) return { misiones: {}, ultimo: null };
-        const datos = JSON.parse(texto);
-        return { misiones: datos.misiones ?? {}, ultimo: datos.ultimo ?? null };
+        const texto = almacen?.getItem(CLAVE);
+        if (!texto) return progresoVacio();
+        return sanear(JSON.parse(texto));
     } catch (e) {
-        return { misiones: {}, ultimo: null };
+        return progresoVacio();
     }
 }
 
 /** Guarda el progreso. Devuelve `false` si el almacenamiento no responde. */
 export function guardarProgreso(almacen, progreso) {
     try {
-        almacen?.setItem(PREFIJO + 'progreso', JSON.stringify(progreso));
+        almacen?.setItem(CLAVE, JSON.stringify(sanear(progreso)));
         return true;
     } catch (e) {
         return false;
@@ -241,9 +281,81 @@ export function guardarProgreso(almacen, progreso) {
 /** Marca una mision como superada y recuerda cual era la ultima. */
 export function registrarSuperada(almacen, idMision) {
     const progreso = leerProgreso(almacen);
-    progreso.misiones[idMision] = { superada: true, fecha: new Date().toISOString().slice(0, 10) };
+    const anterior = progreso.misiones[idMision] ?? {};
+    progreso.misiones[idMision] = {
+        ...anterior,
+        superada: true,
+        fecha: new Date().toISOString().slice(0, 10)
+    };
     progreso.ultimo = idMision;
     return guardarProgreso(almacen, progreso);
+}
+
+/**
+ * Guarda que mision esta abierta y el historial de la terminal. Es lo que
+ * llama la interfaz al cambiar de mision: antes lo hacia a mano y por eso el
+ * historial no se restauraba.
+ */
+export function registrarSesion(almacen, idMision, historial = []) {
+    const progreso = leerProgreso(almacen);
+    if (Number.isInteger(idMision)) {
+        progreso.ultimo = idMision;
+        const anterior = progreso.misiones[idMision] ?? {};
+        progreso.misiones[idMision] = { ...anterior, abierta: true, fecha: anterior.fecha ?? null };
+    }
+    progreso.historial = historial.filter((linea) => typeof linea === 'string').slice(-LIMITE_HISTORIAL);
+    return guardarProgreso(almacen, progreso);
+}
+
+/** Quita la marca de superada para poder repetir la mision. */
+export function desmarcarMision(almacen, idMision) {
+    const progreso = leerProgreso(almacen);
+    const anterior = progreso.misiones[idMision];
+    if (!anterior) return false;
+    progreso.misiones[idMision] = { ...anterior, superada: false };
+    return guardarProgreso(almacen, progreso);
+}
+
+/** Borra el progreso entero. Devuelve `false` si el almacenamiento no responde. */
+export function restablecerProgreso(almacen) {
+    try {
+        almacen?.removeItem(CLAVE);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+/**
+ * Progreso en texto, para copiarlo y pegarlo en otro dispositivo. Es JSON a
+ * proposito: el navegador lo valida al pegar y asi un texto truncado se
+ * detecta en vez de corromper el progreso.
+ */
+export function exportarProgreso(almacen) {
+    return JSON.stringify(leerProgreso(almacen));
+}
+
+/**
+ * Lee un progreso exportado.
+ *
+ * @returns `{ progreso }` si el texto vale, o `{ error }` con el motivo. No
+ *   lanza: el texto viene de una caja de texto y puede ser cualquier cosa.
+ */
+export function importarProgreso(texto) {
+    let datos;
+    try {
+        datos = JSON.parse(String(texto ?? '').trim());
+    } catch (e) {
+        return { error: 'eso no es un progreso de LinuxLearn (no se puede leer como texto)' };
+    }
+    if (!datos || typeof datos !== 'object' || Array.isArray(datos)) {
+        return { error: 'eso no parece un progreso de LinuxLearn' };
+    }
+    const progreso = sanear(datos);
+    if (!Object.keys(progreso.misiones).length && !progreso.historial.length) {
+        return { error: 'el texto es valido pero no contiene ninguna mision' };
+    }
+    return { progreso };
 }
 
 /** Primera mision sin superar, o null si el alumno las termino todas. */

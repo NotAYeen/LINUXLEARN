@@ -202,3 +202,50 @@ describe('shell: protecciones', () => {
         expect(b.ejecutar('echo [$secreto]').stdout).toBe('[]\n');
     });
 });
+
+describe('shell: historial y clear', () => {
+    it('history cuenta los comandos de nivel superior', () => {
+        const sesion = crearSesion();
+        sesion.ejecutar('echo uno');
+        sesion.ejecutar('pwd');
+        const salida = sesion.ejecutar('history').stdout;
+        expect(salida).toContain('echo uno');
+        expect(salida).toContain('pwd');
+    });
+
+    it('los guiones internos no ensucian el historial', () => {
+        const sesion = crearSesion();
+        // Un `bash -c` cuenta como una sola orden —la linea que el alumno
+        // escribio—, pero su contenido no aparece por separado. En bash, el
+        // `history` de un shell hijo no se mezcla con el de arriba.
+        sesion.ejecutar("bash -c 'echo interno'");
+        const trasBash = sesion.ejecutar('history').stdout.split('\n');
+        expect(trasBash.filter((l) => l.includes('interno')).length).toBe(1);
+        // `eval` tampoco genera una entrada nueva.
+        sesion.ejecutar('eval "echo naughty"');
+        const lineas = sesion.ejecutar('history').stdout.split('\n').filter(Boolean);
+        expect(lineas.filter((l) => l.includes('naughty')).length).toBe(1);
+        // Ni las funciones: el cuerpo no se guarda como una orden aparte.
+        sesion.ejecutar('saluda() { echo hola; }');
+        sesion.ejecutar('saluda');
+        const lineasFinales = sesion.ejecutar('history').stdout.split('\n').filter(Boolean);
+        expect(lineasFinales.some((l) => l.trim().endsWith('echo hola'))).toBe(false);
+    });
+
+    it('el historial inicial se restaura al recargar', () => {
+        const sesion = crearSesion({ historial: ['echo uno', 'ls /var'] });
+        expect(sesion.historial).toEqual(['echo uno', 'ls /var']);
+        expect(sesion.ejecutar('history').stdout).toContain('echo uno');
+    });
+
+    it('clear escribe la misma secuencia de escape que el real', () => {
+        // Comprobado con `clear | xxd` en bash: 1b5b 48 1b5b 32 4a 1b5b 33 4a.
+        const r = correr('clear');
+        expect(r.code).toBe(0);
+        expect(r.stdout).toBe('\x1b[H\x1b[2J\x1b[3J');
+    });
+
+    it('clear -x deja el scrollback', () => {
+        expect(correr('clear -x').stdout).toBe('\x1b[H');
+    });
+});

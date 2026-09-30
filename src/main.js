@@ -5,18 +5,23 @@
 
 import '../css/style.css';
 import { NIVELES, misionPorId } from './levels.js';
-import { leerProgreso, siguienteMision, registrarSuperada } from './check.js';
+import { leerProgreso, registrarSesion, siguienteMision } from './check.js';
 import { montarTerminal, crear } from './ui/terminal.js';
 import { montarPanel } from './ui/panel.js';
+import { montarAcciones } from './ui/acciones.js';
 
 /** Estructura de la pagina: barra lateral con misiones y zona principal. */
 function esqueleto() {
     const raiz = document.getElementById('app');
     raiz.textContent = '';
 
+    const barraAcciones = crear('div', { class: 'acciones-zona' });
     const cabecera = crear('header', { class: 'cabecera' },
-        crear('h1', { text: 'LinuxLearn' }),
-        crear('p', { class: 'lema', text: 'Practica la linea de ordenes de Linux en tu navegador.' })
+        crear('div', { class: 'titulos' },
+            crear('h1', { text: 'LinuxLearn' }),
+            crear('p', { class: 'lema', text: 'Practica la linea de ordenes de Linux en tu navegador.' })
+        ),
+        barraAcciones
     );
 
     const lateral = crear('nav', { class: 'lateral', 'aria-label': 'Misiones' });
@@ -29,18 +34,23 @@ function esqueleto() {
         panel
     )));
 
-    return { raiz, lateral, panel, terminal };
+    return { raiz, lateral, panel, terminal, barraAcciones };
 }
 
 /** Lista lateral con el estado de cada mision. */
 function pintarMisiones(contenedor, progreso, activa, alElegir) {
     contenedor.textContent = '';
     const completadas = Object.values(progreso.misiones).filter((m) => m.superada).length;
+    const tanto = Math.round((completadas / NIVELES.length) * 100);
 
+    const barra = crear('div', { class: 'barra-progreso', role: 'progressbar', 'aria-valuenow': String(tanto), 'aria-valuemin': '0', 'aria-valuemax': '100' },
+        crear('div', { class: 'relleno', style: 'width: ' + tanto + '%' })
+    );
     contenedor.append(crear('p', { class: 'progreso' },
         crear('strong', { text: completadas + ' / ' + NIVELES.length }),
-        ' misiones superadas'
-    ));
+        ' misiones superadas',
+        crear('span', { class: 'porcentaje', text: tanto + ' %' })
+    ), barra);
 
     const lista = crear('ol', { class: 'misiones' });
     for (const mision of NIVELES) {
@@ -61,48 +71,81 @@ function pintarMisiones(contenedor, progreso, activa, alElegir) {
 }
 
 function arrancar() {
-    const { lateral, panel, terminal } = esqueleto();
+    const contenedor = document.getElementById('app');
+    // El modulo se ejecuta al importarse, y los tests lo llaman a mano mas de
+    // una vez: si no hay contenedor, no hay nada que montar.
+    if (!contenedor) return;
+    const { lateral, panel: zonaPanel, terminal, barraAcciones } = esqueleto();
     const almacen = window.localStorage ?? null;
     let progreso = leerProgreso(almacen);
     let actual = progreso.ultimo ?? siguienteMision(progreso, NIVELES)?.id ?? 1;
-    let enganche = null;
 
     const tty = montarTerminal(terminal, {
         historialInicial: progreso.historial ?? []
     });
 
+    /** Repinta la lateral con el progreso que haya ahora mismo. */
+    function refrescar() {
+        progreso = leerProgreso(almacen);
+        progreso.ultimo = actual;
+        progreso.historial = tty.historial();
+        pintarMisiones(lateral, progreso, actual, mostrar);
+        acciones.sincroniza(actual, Boolean(progreso.misiones[actual]?.superada));
+    }
+
+    /** Guarda la posicion (mision abierta + historial) y repinta. */
+    function guardar() {
+        acciones.guardaSesion(actual, tty.historial());
+        refrescar();
+    }
+
     function mostrar(id) {
         const mision = misionPorId(id);
         if (!mision) return;
         actual = id;
-        progreso.ultimo = id;
-        progreso.historial = tty.historial();
-        progreso.misiones[id] = { ...progreso.misiones[id], abierta: true };
-        try { window.localStorage?.setItem('lxl_progreso', JSON.stringify(progreso)); } catch (e) { /* modo privado */ }
+        acciones.cancelaConfirmacion();
+        // El progreso lo escribe `check.js`: antes lo hacia esta misma funcion a
+        // mano, y por eso los errores de almacenamiento pasaban desapercibidos.
+        acciones.guardaSesion(id, tty.historial());
 
         // El panel se monta despues para poder engancharlo a la terminal: asi
         // cada comando que el alumno ejecuta se comprueba al momento.
-        enganche = montarPanel(panel, mision, {
+        const panelMision = montarPanel(zonaPanel, mision, {
             almacen,
             siguienteMision: () => {
-                const progresoActual = leerProgreso(almacen);
-                const siguiente = siguienteMision(progresoActual, NIVELES);
+                const siguiente = siguienteMision(leerProgreso(almacen), NIVELES);
                 if (siguiente) mostrar(siguiente.id);
                 else tty.enfocar();
             },
-            onSuperada: () => {
-                progreso = leerProgreso(almacen);
-                progreso.ultimo = id;
-                progreso.historial = tty.historial();
-                pintarMisiones(lateral, progreso, actual, mostrar);
-            }
+            onSuperada: () => guardar()
         });
-        tty.alEjecutar = (guion, resultado) => enganche?.comandoEjecutado?.(guion, resultado);
-        pintarMisiones(lateral, progreso, actual, mostrar);
+        // El panel devuelve `alComando` plano. Antes `main.js` sacaba el enganche de
+        // un nivel mas arriba, y el acierto automatico no llegaba a comprobarse
+        // nunca en la pagina (los tests lo montaban a mano y no lo cazaban).
+        tty.alEjecutar = (guion, resultado) => panelMision.alComando?.(guion, resultado);
+        refrescar();
     }
 
-    pintarMisiones(lateral, progreso, actual, mostrar);
+    const acciones = montarAcciones(barraAcciones, {
+        almacen,
+        tty,
+        alCambiarProgreso: (cambio = {}) => {
+            if (cambio.restablecido) {
+                actual = 1;
+                mostrar(1);
+            } else if (cambio.importado) {
+                constTraido = leerProgreso(almacen);
+                actual = siguienteMision(progresoTraido, NIVELES)?.id ?? 1;
+                mostrar(actual);
+            } else {
+                refrescar();
+            }
+        }
+    });
+
     mostrar(actual);
+    acciones.compruebaAlmacenamiento();
+    refrescar();
     tty.enfocar();
 
     // Cualquier clic en la pagina devuelve el foco a la terminal: es la única

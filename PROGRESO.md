@@ -24,7 +24,7 @@ propio en JavaScript. Sin backend, sin WASM. Reloj congelado en
 | 7. Publicacion en GitHub Pages | HECHA: repo `NotAYeen/LINUXLEARN`, Pages desplegado |
 
 **Estado de la CI (todo en verde, local y en GitHub Actions):** `validate`
-32/32 misiones, `test` 104/104, `test:bash` 80/80 casos contra bash real, `build`
+32/32 misiones, `test` 134/134, `test:bash` 81/81 casos contra bash real, `build`
 correcto y Pages desplegado en https://notayeen.github.io/LINUXLEARN/.
 
 Notas de infraestructura que costaron un rato:
@@ -86,23 +86,36 @@ Notas de infraestructura que costaron un rato:
   y aparece el botón de "siguiente misión"; mientras no acierta **no regaña**
   (la terminal ya muestra los errores) y solo a partir del tercer intento da
   la diferencia línea a línea.
-- `src/check.js` — la comprobación. Se evalúa **el contrato, no el texto**: por
+- `src/check.js` — la comprobación y el progreso. Se evalúa **el contrato, no el texto**: por
   eso `cat notas.txt` también vale cuando la solución usa el camino completo.
   Si una misión no declarara `salidaEsperada` ni `comprobaciones`, el contrato
   se deriva de la salida de su solución de referencia (con caché), para que la
   comprobación automática siga siendo fiable. Hoy las 32 misiones declaran
   contrato, así que esa vía es solo una red de seguridad.
+  También es **el único módulo que escribe en `localStorage`**
+  (`leerProgreso`, `guardarProgreso`, `registrarSuperada`, `registrarSesion`,
+  `desmarcarMision`, `restablecerProgreso`, `exportarProgreso`,
+  `importarProgreso`). Todo lo que entra de ahí pasa por `sanear`, así que un
+  progreso corrupto o truncado no rompe la aplicación, y el historial se corta
+  a `LIMITE_HISTORIAL` para no llenar el almacenamiento.
+- `src/ui/acciones.js` — la barra de la cabecera: **reiniciar máquina** (el
+  árbol de ficheros vuelve a su estado inicial, sin tocar el progreso),
+  **rehacer misión**, **exportar/importar progreso** y **restablecer progreso**,
+  que exige dos pulsaciones y explica el peligro en vez de usar un modal.
 - `src/main.js` — une terminal, panel y lista de misiones; es lo único que
   arranca la página.
 - `tests/` — `fs`, `parser`, `expansion`, `levels`, `engine`, `ui` y `sesion`
-  (104 pruebas; solo los dos últimos usan jsdom, el resto corre en node).
+  (134 pruebas; solo los dos últimos usan jsdom, el resto corre en node).
   `sesion.test.js` simula una sesión real de alumno: seis comandos escritos en
-  la terminal, con errores, `cd` y acierto, y comprueba que el panel reacciona.
+  la terminal, con errores, `cd` y acierto, y comprueba que el panel reacciona;
+  además monta `src/main.js` entero (`arrancar()`) para que el cableado real
+  esté cubierto — así se cazó que el enganche del panel se leía un nivel más
+  arriba y el acierto automático no llegaba a funcionar en la página.
 - `index.html`, `css/style.css`, `favicon.svg` — la página. `vite.config.js`
   usa `input: 'index.html'` para que `dist/` salga con el HTML y `bundle.js`.
 - `scripts/validate-levels.mjs` — valida la forma de `src/levels.js`.
 - `scripts/diff-bash.mjs` + `scripts/casos-bash.mjs` — comparación
-  diferencial; hoy `CASOS` tiene 80 guiones, todos en verde contra bash.
+  diferencial; hoy `CASOS` tiene 81 guiones, todos en verde contra bash.
 - `.github/workflows/ci.yml` — validate + test + diff-bash + build + Pages.
 
 ### Correcciones de motor hechas el 2026-09-28 (no deshacer)
@@ -263,7 +276,7 @@ Todo lo de las fases 1 a 7 esta hecho y en verde. Queda pulir:
 3. **Mensajes de sintaxis**: alinearlos con bash real (ver nota en §1); ahora
    usan el estilo de la casa (`expected 'fi'`), no el de GNU.
 4. **Extraer mas comparaciones diferenciales** a `scripts/casos-bash.mjs` (hoy
-   80 casos, todos en verde) y cubrir `tar`, `stat`, `id`, `date`, `ln`, `chmod`.
+   81 casos, todos en verde) y cubrir `tar`, `stat`, `id`, `date`, `ln`, `chmod`.
 5. **Worker**: `shell.js` corre en el hilo principal con presupuesto de pasos.
    Si algun dia se quiere aislar, `vite.config.js` ya tiene el bloque `worker`.
 6. **Ampliar el arbol** de la semilla si alguna mision lo pide (informes,
