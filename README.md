@@ -19,10 +19,13 @@ JavaScript: no hay backend, ni WebAssembly, ni Pty.js, ni un Linux embebido.
 
 Todo se hace **en la terminal simulada**: escribes el comando, pulsas Enter y
 ves su salida y sus errores en el momento, igual que en una terminal de verdad.
-El panel de la misión vigila lo que escribes y te dice si has acertado, con la
-diferencia línea a línea cuando te falta algo, y distingue entre "has fallado"
-y "el comando no funciona". El historial (flechas), el TAB para completar, Ctrl-C
-y Ctrl-L funcionan igual que en bash.
+No hay que comprobar nada: el simulador **reconoce el acierto solo**, en cuanto
+ejecutas el comando, aunque escribas una forma equivalente (`cat notas.txt` en
+lugar del camino completo). While no acierta no te regaña —la terminal ya te
+ha enseñado el error real— y a partir del tercer intento te da una pista con la
+diferencia línea a línea. Al acertar aparece un botón para pasar a la siguiente
+misión. El historial (flechas), el TAB para completar, Ctrl-C y Ctrl-L
+funcionan igual que en bash.
 
 ## Requisitos
 

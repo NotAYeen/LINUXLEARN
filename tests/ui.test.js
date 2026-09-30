@@ -111,29 +111,87 @@ describe('panel de mision', () => {
         expect(superada).toBe(mision.id);
     });
 
+    it('detecta el acierto sin pulsar el boton', () => {
+        const mision = NIVELES.find((m) => m.modo === 'Terminal');
+        let superada = null;
+        const { enganche } = montarPanel(raiz, mision, { onSuperada: (id) => { superada = id; } });
+        // Ni un clic: solo el comando escrito en la terminal.
+        enganche.comandoEjecutado(mision.soluciones[0]);
+        expect(raiz.querySelector('.seguimiento').className).toContain('ok');
+        expect(superada).toBe(mision.id);
+    });
+
+    it('acepta cualquier comando equivalente al de referencia', () => {
+        // Mision 3: `cat ~/proyecto/notas.txt` y `cat proyecto/notas.txt` dan lo
+        // mismo, y los dos valen: lo que se comprueba es el contrato, no el texto.
+        const mision = misionPorId(3);
+        const { enganche } = montarPanel(raiz, mision);
+        enganche.comandoEjecutado('cat proyecto/notas.txt');
+        expect(raiz.querySelector('.seguimiento').className).toContain('ok');
+    });
+
+    it('no regaña mientras el alumno prueba comandos', () => {
+        const mision = misionPorId(1);
+        const { enganche } = montarPanel(raiz, mision);
+        enganche.comandoEjecutado('ls');
+        enganche.comandoEjecutado('ls -a');
+        // Todavia no dice nada: la terminal ya ha mostrado la salida.
+        expect(raiz.querySelector('.seguimiento').className).toContain('esperando');
+        // A partir del tercer intento si da una pista.
+        enganche.comandoEjecutado('ls -l /etc');
+        expect(raiz.querySelector('.seguimiento').textContent).toMatch(/Todavia no|llevo mal/);
+    });
+
+    it('una vez acertado no vuelve a comprobar', () => {
+        const mision = misionPorId(1);
+        let veces = 0;
+        const { enganche } = montarPanel(raiz, mision, { onSuperada: () => { veces++; } });
+        enganche.comandoEjecutado(mision.soluciones[0]);
+        enganche.comandoEjecutado('ls');
+        expect(veces).toBe(1);
+    });
+
     it('un comando equivocado no pasa y explica la diferencia', () => {
         const mision = misionPorId(1);
         const { enganche } = montarPanel(raiz, mision);
-        enganche.comandoEjecutado('ls /tmp');
+        // Con tres intentos fallidos el panel ya da la diferencia.
+        for (let i = 0; i < 3; i++) enganche.comandoEjecutado('ls /tmp');
         expect(raiz.querySelector('.seguimiento').className).toContain('mal');
         expect(raiz.querySelector('.seguimiento').textContent).toMatch(/Todavia no/);
     });
 
-    it('un comando que falla se distingue de uno que no acierta', () => {
+    it('un comando que falla tampoco molesta: lo dice la terminal', () => {
         const mision = misionPorId(1);
         const { enganche } = montarPanel(raiz, mision);
         enganche.comandoEjecutado('ordeninventada');
+        // Con un solo intento el panel sigue callado; el error ya se ve abajo.
+        expect(raiz.querySelector('.seguimiento').className).toContain('esperando');
+        // Cuando el alumno insiste, se le distingue del "no has acertado".
+        for (let i = 0; i < 3; i++) enganche.comandoEjecutado('ordeninventada');
         expect(raiz.querySelector('.seguimiento').className).toContain('error');
     });
 
     it('el boton comprueba el ultimo comando escrito en la terminal', () => {
         const mision = misionPorId(1);
-        const tty = montarTerminal(terminalRaiz, { alEjecutar: null });
-        montarPanel(raiz, mision);
-        tty.escribir(mision.soluciones[0]);
+        const tty = montarTerminal(terminalRaiz, {});
+        const { enganche } = montarPanel(raiz, mision);
+        tty.alEjecutar = (guion) => enganche.comandoEjecutado(guion);
+        tty.escribir('ls');
         tty.ejecutar();
-        // El panel ya no esta enganchado (test suelto), pero el boton existe.
-        expect(raiz.querySelector('.boton.comprobar').textContent).toContain('ultimo comando');
+        // Con un solo intento fallido el panel calla; el boton lo hace hablar.
+        raiz.querySelector('.boton.comprobar').click();
+        expect(raiz.querySelector('.seguimiento').textContent).toMatch(/Todavia no/);
+    });
+
+    it('al acertar ofrece pasar a la siguiente mision', () => {
+        const mision = misionPorId(1);
+        let pedidas = 0;
+        const { enganche } = montarPanel(raiz, mision, { siguienteMision: () => { pedidas++; } });
+        enganche.comandoEjecutado(mision.soluciones[0]);
+        const boton = raiz.querySelector('.boton.siguiente');
+        expect(boton).toBeTruthy();
+        boton.click();
+        expect(pedidas).toBe(1);
     });
 
     it('la solucion de referencia se puede desplegar', () => {
@@ -152,8 +210,9 @@ describe('panel de mision', () => {
 
         tty.escribir('ls');
         tty.ejecutar();
-        expect(raiz.querySelector('.seguimiento').className).toContain('mal');
+        // La salida real esta en la terminal; el panel todavia no se queja.
         expect(tty.texto()).toContain('respaldos');
+        expect(raiz.querySelector('.seguimiento').className).toContain('esperando');
 
         tty.escribir(mision.soluciones[0]);
         tty.ejecutar();

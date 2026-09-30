@@ -23,6 +23,33 @@ export function guionDeResolucion(mision, respuesta) {
 }
 
 /**
+ * Salida esperada de una mision que no declara contrato: se obtiene ejecutando
+ * su solucion de referencia. Sin esto, una mision sin `salidaEsperada` ni
+ * `comprobaciones` daria por buena cualquier comando que no falle, que es
+ * justo lo que estropea la comprobacion automatica de la terminal.
+ *
+ * El resultado se cachea: el motor es determinista, asi que solo hace falta
+ * la primera vez.
+ */
+const esperadoCache = new Map();
+
+function salidaEsperadaDe(mision) {
+    const clave = mision.id;
+    if (esperadoCache.has(clave)) return esperadoCache.get(clave);
+    const referencia = guionDeResolucion(mision, '');
+    if (!referencia) return null;
+    const r = crearSesion().ejecutar(referencia);
+    const valor = { stdout: r.stdout, code: r.code };
+    esperadoCache.set(clave, valor);
+    return valor;
+}
+
+/** Limpia la cache (solo para los tests, que cambian el contenido del arbol). */
+export function limpiarCacheEsperadas() {
+    esperadoCache.clear();
+}
+
+/**
  * Evalua una respuesta.
  *
  * @param {object} mision  entrada de `NIVELES`
@@ -36,16 +63,31 @@ export function evaluar(mision, respuesta, opciones = {}) {
 
     const detalles = [];
     const esperado = mision.salidaEsperada;
+    let hayContrato = false;
+
     if (typeof esperado === 'string' && esperado.length) {
+        hayContrato = true;
         detalles.push(...compararSalida(esperado, resultado.stdout));
     }
     for (const comprobacion of mision.comprobaciones ?? []) {
+        hayContrato = true;
         detalles.push(...comprobar(comprobacion, resultado, sesion));
     }
 
-    // Sin contrato declarado, basta con que el guion termine sin errores.
-    if (detalles.length === 0 && !esperado && !(mision.comprobaciones ?? []).length) {
-        if (resultado.code !== 0) {
+    // Sin contrato escrito, el contrato es la salida de la solucion de
+    // referencia: asi la terminal puede dar por buena una respuesta automaticamente.
+    if (!hayContrato) {
+        const referencia = salidaEsperadaDe(mision);
+        if (referencia) {
+            if (referencia.code === 0 && resultado.code !== 0) {
+                detalles.push({
+                    campo: 'code', esperado: 0, obtenido: resultado.code,
+                    texto: 'el comando deberia funcionar y ha fallado'
+                });
+            } else {
+                detalles.push(...compararSalida(referencia.stdout, resultado.stdout));
+            }
+        } else if (resultado.code !== 0) {
             detalles.push({ campo: 'code', esperado: 0, obtenido: resultado.code, texto: 'el comando termino con error' });
         }
     }

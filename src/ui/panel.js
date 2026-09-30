@@ -72,9 +72,17 @@ export function montarPanel(raiz, mision, opciones = {}) {
     pistas.append(botonPista);
 
     const construir = MODALIDADES[mision.modo] ?? montarTerminal;
+    // Terminal lleva su propio mensaje de seguimiento; el bloque general de
+    // abajo solo se usa para las modalidades que no tienen pantalla propia.
+    const conSeguimientoPropio = construir === montarTerminal;
     const enganche = construir(zona, mision, {
         ...opciones,
+        alSuperar: (superada) => {
+            registrarSuperada(opciones.almacen, superada.id);
+            opciones.onSuperada?.(superada.id);
+        },
         alEvaluar: (resultado) => {
+            if (conSeguimientoPropio) return;
             veredicto.textContent = '';
             veredicto.className = 'veredicto ' + (resultado.correcto ? 'ok' : 'mal');
             if (resultado.correcto) {
@@ -90,57 +98,79 @@ export function montarPanel(raiz, mision, opciones = {}) {
         }
     }) ?? {};
 
-    // El veredicto general solo aparece cuando la modalidad ya tiene su propio
-    // mensaje (Ensamblaje, Auditoria): en Terminal el seguimiento va junto al
-    // boton, mas cerca de donde el alumno esta mirando.
-    if (!enganche.comandoEjecutado) veredicto.hidden = true;
+    if (conSeguimientoPropio) veredicto.hidden = true;
 
     return { mision, zona, enganche };
 }
 
 /**
  * Terminal: el alumno escribe en la terminal de abajo, no en un cuadro aparte.
- * Aqui solo se leen los comandos que se ejecutan y se dice si la mision esta
- * superada, con la diferencia exacta cuando falla.
+ * Cada comando que ejecuta se comprueba solo: si acierta, se dice al momento y
+ * la mision queda superada. Mientras no acierta no se regaña (la terminal ya
+ * muestra los errores de verdad); a partir del tercer intento se echa una
+ * mano con la diferencia.
  */
 function montarTerminal(zona, mision, opciones) {
-    const estado = crear('div', { class: 'seguimiento' });
-    const boton = crear('button', { class: 'boton comprobar', type: 'button', text: 'Comprobar el ultimo comando' });
+    const estado = crear('div', { class: 'seguimiento esperando' });
+    const boton = crear('button', { class: 'boton comprobar', type: 'button', text: 'Comprobar' });
     const referencia = crear('details', { class: 'referencia' },
         crear('summary', { text: 'Ver la solucion de referencia' }),
         crear('pre', { class: 'comando-referencia', text: mision.soluciones?.[0] ?? '' })
     );
 
+    let intentos = 0;
+    let superado = false;
     let ultimo = null;
 
-    /** Comprueba el ultimo comando que se ejecuto en la terminal. */
-    function comprobar(guion) {
+    /** Comprueba un comando; `silencioso` mientras el alumno esta probando. */
+    function comprobar(guion, silencioso) {
+        if (superado) return;
         if (!guion) {
             estado.className = 'seguimiento esperando';
             estado.textContent = 'Escribe el comando en la terminal de abajo y pulsa Enter.';
             return;
         }
         const resultado = evaluar(mision, guion, { sesion: opciones.sesion });
-        estado.textContent = '';
-        estado.className = 'seguimiento ' + (resultado.correcto ? 'ok' : (resultado.codigo === 0 ? 'mal' : 'error'));
+
         if (resultado.correcto) {
-            estado.append(crear('strong', { text: 'Correcto. ' }));
-            estado.append(document.createTextNode('La orden que has escrito es la que buscabamos.'));
-        } else if (resultado.codigo !== 0) {
+            superado = true;
+            intentos = 0;
+            estado.className = 'seguimiento ok';
+            estado.textContent = '';
+            estado.append(
+                crear('strong', { text: 'Correcto. ' }),
+                document.createTextNode('El comando se ha comprobado solo al ejecutarlo.')
+            );
+            if (opciones.siguienteMision) {
+                const seguir = crear('button', { class: 'boton siguiente', type: 'button', text: 'Siguiente mision' });
+                seguir.addEventListener('click', () => opciones.siguienteMision());
+                estado.append(crear('p', {}, seguir));
+            }
+            opciones.alEvaluar?.(resultado);
+            opciones.alSuperar?.(mision);
+            return;
+        }
+
+        intentos++;
+        // Fallar no es motivo para avisar: la terminal ya ha enseñado el error.
+        if (silencioso && intentos < 3) return;
+
+        estado.className = 'seguimiento ' + (resultado.codigo === 0 ? 'mal' : 'error');
+        estado.textContent = '';
+        if (resultado.codigo !== 0) {
             estado.append(crear('strong', { text: 'Ese comando falla. ' }));
             estado.append(document.createTextNode('Mira el aviso que ha salido en la terminal y prueba otra vez.'));
         } else {
             estado.append(crear('strong', { text: 'Todavia no. ' }));
             for (const detalle of resultado.detalles) estado.append(crear('p', { text: detalle.texto }));
         }
-        opciones.alEvaluar?.(resultado);
     }
 
-    boton.addEventListener('click', () => comprobar(ultimo));
+    boton.addEventListener('click', () => comprobar(ultimo, false));
 
     zona.append(
         crear('p', { class: 'instruccion-terminal' },
-            'Escribe el comando en la terminal de abajo y pulsa Enter: veras la salida real, con sus errores, en cuanto lo ejecutes.'
+            'Escribe el comando en la terminal de abajo y pulsa Enter. Se comprueba solo: no hace falta pulsar nada.'
         ),
         estado,
         crear('div', { class: 'acciones' }, boton),
@@ -150,7 +180,7 @@ function montarTerminal(zona, mision, opciones) {
 
     // Devuelve el enganche que `main.js` usa para escuchar la terminal.
     return {
-        comandoEjecutado(guion) { ultimo = guion; comprobar(guion); }
+        comandoEjecutado(guion) { ultimo = guion; comprobar(guion, true); }
     };
 }
 

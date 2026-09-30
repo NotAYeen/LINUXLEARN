@@ -84,6 +84,12 @@ function arrancar() {
         // cada comando que el alumno ejecuta se comprueba al momento.
         enganche = montarPanel(panel, mision, {
             almacen,
+            siguienteMision: () => {
+                const progresoActual = leerProgreso(almacen);
+                const siguiente = siguienteMision(progresoActual, NIVELES);
+                if (siguiente) mostrar(siguiente.id);
+                else tty.enfocar();
+            },
             onSuperada: () => {
                 progreso = leerProgreso(almacen);
                 progreso.ultimo = id;

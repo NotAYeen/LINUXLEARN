@@ -24,7 +24,7 @@ propio en JavaScript. Sin backend, sin WASM. Reloj congelado en
 | 7. Publicacion en GitHub Pages | HECHA: repo `NotAYeen/LINUXLEARN`, Pages desplegado |
 
 **Estado de la CI (todo en verde, local y en GitHub Actions):** `validate`
-32/32 misiones, `test` 99/99, `test:bash` 80/80 casos contra bash real, `build`
+32/32 misiones, `test` 104/104, `test:bash` 80/80 casos contra bash real, `build`
 correcto y Pages desplegado en https://notayeen.github.io/LINUXLEARN/.
 
 Notas de infraestructura que costaron un rato:
@@ -74,8 +74,6 @@ Notas de infraestructura que costaron un rato:
   CI de Ubuntu.
 - `src/levels.js` — las 32 misiones (`MODOS`, `DIFICULTADES`, `COMANDOS`,
   `misionPorId`).
-- `src/check.js` — evaluación de una respuesta de misión, compartida por la
-  interfaz y los tests, más el progreso en `localStorage` con prefijo `lxl_`.
 - `src/ui/terminal.js` — el terminal: es **el sitio donde el alumno escribe y
   ejecuta** (no hay un cuadro de texto aparte). Historial con flechas, TAB con
   sugerencias, Ctrl-C, Ctrl-L, pie con el código de salida y `$?`, y foco
@@ -83,13 +81,21 @@ Notas de infraestructura que costaron un rato:
   texto (hay un test que lo comprueba con un `<img onerror>`).
 - `src/ui/panel.js` — el panel de misión con las cuatro modalidades
   (Terminal, Depuración, Auditoría, Ensamblaje). En la modalidad Terminal no
-  escribe nada: se engancha a la terminal con `tty.alEjecutar` y comprueba
-  **cada comando en cuanto se ejecuta**, distinguiendo tres casos (correcto, no
-  acierta, el comando falla).
+  escribe nada: se engancha a la terminal con `tty.alEjecutar` y **comprueba
+  cada comando en cuanto se ejecuta**, sin botón. Al acertar se dice al momento
+  y aparece el botón de "siguiente misión"; mientras no acierta **no regaña**
+  (la terminal ya muestra los errores) y solo a partir del tercer intento da
+  la diferencia línea a línea.
+- `src/check.js` — la comprobación. Se evalúa **el contrato, no el texto**: por
+  eso `cat notas.txt` también vale cuando la solución usa el camino completo.
+  Si una misión no declarara `salidaEsperada` ni `comprobaciones`, el contrato
+  se deriva de la salida de su solución de referencia (con caché), para que la
+  comprobación automática siga siendo fiable. Hoy las 32 misiones declaran
+  contrato, así que esa vía es solo una red de seguridad.
 - `src/main.js` — une terminal, panel y lista de misiones; es lo único que
   arranca la página.
 - `tests/` — `fs`, `parser`, `expansion`, `levels`, `engine`, `ui` y `sesion`
-  (99 pruebas; solo los dos últimos usan jsdom, el resto corre en node).
+  (104 pruebas; solo los dos últimos usan jsdom, el resto corre en node).
   `sesion.test.js` simula una sesión real de alumno: seis comandos escritos en
   la terminal, con errores, `cd` y acierto, y comprueba que el panel reacciona.
 - `index.html`, `css/style.css`, `favicon.svg` — la página. `vite.config.js`
