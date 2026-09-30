@@ -86,7 +86,10 @@ function ejecutarBash(bash, caso) {
             cwd: caso.cwd ? join(dir, caso.cwd) : dir,
             encoding: 'utf8',
             stdio: ['pipe', 'pipe', 'pipe'],
-            env: { ...process.env, LC_ALL: 'C', LANG: 'C', PS1: '', COLUMNS: '80' }
+            // TERM va fijo porque el simulador es una terminal concreta: sin
+            // el, `clear` en el bash de CI aborta con "TERM environment variable
+            // not set" y la comparacion no mide lo que cree medir.
+            env: { ...process.env, LC_ALL: 'C', LANG: 'C', PS1: '', COLUMNS: '80', TERM: 'xterm' }
         });
         return { stdout: normalizar(salida), stderr: normalizar(''), code: 0 };
     } catch (e) {
