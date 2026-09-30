@@ -17,14 +17,26 @@ propio en JavaScript. Sin backend, sin WASM. Reloj congelado en
 | --- | --- |
 | 1. `errors.js`, `fs.js`, `seed.js` | HECHA (con `tests/fs.test.js`) |
 | 2. `lexer.js`, `parser.js`, `expansion.js` | HECHA (con `tests/parser.test.js` y `tests/expansion.test.js`) |
-| 3. `arith.js`, `builtins.js` y `coreutils/` | HECHA: 51 comandos registrados + `arith.js` para `$(( ))` |
+| 3. `arith.js`, `builtins.js` y `coreutils/` | HECHA: 52 comandos registrados + `arith.js` para `$(( ))` |
 | 4. `shell.js` | HECHA: tuberias, redirecciones, funciones, bucles, `trap`, `set`, subshells |
 | 5. `src/levels.js` + validadores | HECHA: 32 misiones, validate en verde, `tests/levels.test.js` |
 | 6. Interfaz, panel de mision, estilos | HECHA: `src/main.js`, `src/ui/terminal.js`, `src/ui/panel.js`, `src/check.js`, `css/style.css`, `tests/ui.test.js` (jsdom) |
 | 7. Publicacion en GitHub Pages | HECHA: repo `NotAYeen/LINUXLEARN`, Pages desplegado |
 
-**Estado de la CI (local, en verde):** `validate` 32/32 misiones, `test` 89/89,
-`test:bash` 80/80 casos contra bash real, `build` correcto.
+**Estado de la CI (todo en verde, local y en GitHub Actions):** `validate`
+32/32 misiones, `test` 91/91, `test:bash` 79/79 casos contra bash real, `build`
+correcto y Pages desplegado en https://notayeen.github.io/LINUXLEARN/.
+
+Notas de infraestructura que costaron un rato:
+
+- `jsdom@30` exige **Node >= 22.22**; con Node 20 el worker de los tests de
+  interfaz no arranca ni en Windows ni en Ubuntu. La CI usa Node 24 y
+  `package.json` declara `engines`.
+- Solo `tests/ui.test.js` pide jsdom, con el comentario
+  `@vitest-environment jsdom` en la cabecera; el resto de tests corre en node,
+  que es más rápido.
+- `vitest` necesita `pool` explícito si jsdom se pone global: aquí no hace
+  falta con el entorno por fichero.
 
 ### Ficheros que ya existen y se pueden dar por buenos
 
@@ -51,13 +63,15 @@ propio en JavaScript. Sin backend, sin WASM. Reloj congelado en
   `local`, bucles, `case`, `trap`, `set -euo pipefail`, presupuesto de pasos y
   `crearSesion()` con `ejecutar`, `escribir`, `cd`, `reset`, `sugerencias`,
   `prompt`, `interrumpir`.
-- `src/engine/coreutils/` — **51 comandos registrados**:
+- `src/engine/coreutils/` — **52 comandos registrados**:
   `awk basename bash cat chmod chown cp cut date dirname echo env false file find
-  grep head hostname id ln ls mkdir mv printenv printf pwd readlink realpath rm
+  grep head hostname id ln ls mkdir mv printenv printf pwd readlink realpath rev rm
   rmdir sed seq sleep sort stat tail tar tee test touch tr true uniq wc which
   whoami xargs yes`, más `io.js` (lectura de operandos compartida), `regex.js`
   (regex POSIX→RegExp) e `index.js` (el barril).
-  Todos siguen el contrato de §2.
+  **Ojo**: un comando que no esté en `COMANDOS` del barril existe en disco pero
+  el shell responde `command not found`; así se coló `rev` y solo se vio en la
+  CI de Ubuntu.
 - `src/levels.js` — las 32 misiones (`MODOS`, `DIFICULTADES`, `COMANDOS`,
   `misionPorId`).
 - `src/check.js` — evaluación de una respuesta de misión, compartida por la
@@ -68,13 +82,13 @@ propio en JavaScript. Sin backend, sin WASM. Reloj congelado en
   (Terminal, Depuración, Auditoría, Ensamblaje).
 - `src/main.js` — une terminal, panel y lista de misiones; es lo único que
   arranca la página.
-- `tests/` — `fs`, `parser`, `expansion`, `levels`, `engine` y `ui` (89 pruebas,
-  jsdom para la interfaz).
+- `tests/` — `fs`, `parser`, `expansion`, `levels`, `engine` y `ui` (91 pruebas;
+  solo `ui.test.js` usa jsdom, el resto corre en node).
 - `index.html`, `css/style.css`, `favicon.svg` — la página. `vite.config.js`
   usa `input: 'index.html'` para que `dist/` salga con el HTML y `bundle.js`.
 - `scripts/validate-levels.mjs` — valida la forma de `src/levels.js`.
 - `scripts/diff-bash.mjs` + `scripts/casos-bash.mjs` — comparación
-  diferencial; hoy `CASOS` tiene 80 guiones, todos en verde contra bash.
+  diferencial; hoy `CASOS` tiene 79 guiones, todos en verde contra bash.
 - `.github/workflows/ci.yml` — validate + test + diff-bash + build + Pages.
 
 ### Correcciones de motor hechas el 2026-09-28 (no deshacer)
@@ -98,7 +112,7 @@ Al pasar los tests a vitest salieron cuatro fallos reales del motor:
 
 ---
 
-## 2. Contrato de los comandos (NO cambiar sin revisar los 51 ya escritos)
+## 2. Contrato de los comandos (NO cambiar sin revisar los 52 ya escritos)
 
 ```js
 // src/engine/coreutils/<nombre>.js
@@ -230,12 +244,12 @@ Todo lo de las fases 1 a 7 esta hecho y en verde. Queda pulir:
 
 1. **Rellenar `comandos`** de las 32 misiones con los comandos que aparecen en
    `soluciones[0]` (ya se pueden leer del registro).
-2. **`awditoria.tokens`** de las misiones de Auditoria: son listas cortas de
+2. **`auditoria.tokens`** de las misiones de Auditoria: son listas cortas de
    ejemplo; conviene ampliar la del guion de la 26.
 3. **Mensajes de sintaxis**: alinearlos con bash real (ver nota en §1); ahora
    usan el estilo de la casa (`expected 'fi'`), no el de GNU.
 4. **Extraer mas comparaciones diferenciales** a `scripts/casos-bash.mjs` (hoy
-   80 casos, todos en verde) ycubrir `tar`, `stat`, `id`, `date`.
+   79 casos, todos en verde) y cubrir `tar`, `stat`, `id`, `date`, `ln`, `chmod`.
 5. **Worker**: `shell.js` corre en el hilo principal con presupuesto de pasos.
    Si algun dia se quiere aislar, `vite.config.js` ya tiene el bloque `worker`.
 6. **Ampliar el arbol** de la semilla si alguna mision lo pide (informes,

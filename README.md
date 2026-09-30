@@ -8,18 +8,23 @@ JavaScript: no hay backend, ni WebAssembly, ni Pty.js, ni un Linux embebido.
 - Cuatro modalidades: **Terminal**, **Depuración**, **Auditoría** y **Ensamblaje**.
 - Un sistema de ficheros virtual determinista, con permisos, enlaces simbólicos
   y usuarios, para que `chmod`, `find` o `tar` tengan consecuencias reales.
+- 52 comandos escritos a mano: `grep`, `sed`, `awk`, `find`, `sort`, `uniq`,
+  `cut`, `tr`, `tar`, `ls`, `rm`… más los builtins del shell (`cd`, `export`,
+  `set`, `trap`, funciones con `local`).
 - Errores con el mismo texto que produce Bash y las herramientas GNU.
-- Validación doble: reglas internas por misión y comparación differential
-  contra `bash` real en integración continua.
+- Validación doble: reglas internas por misión y comparación diferencial
+  contra `bash` real en integración continua (79 guiones en verde).
 
 ## Requisitos
 
-Node.js 20 o superior.
+Node.js 22.22 o superior (los tests de interfaz usan `jsdom@30`).
 
 ```bash
 npm install
 npm run dev      # servidor de desarrollo
 npm test         # tests del motor y de la interfaz
+npm run validate # comprueba la forma de las 32 misiones
+npm run test:bash # compara 79 guiones contra bash real
 npm run build    # genera dist/
 npm run preview  # sirve dist/ tal cual se publicara
 ```
@@ -27,11 +32,14 @@ npm run preview  # sirve dist/ tal cual se publicara
 ## Estructura
 
 ```
-src/engine/     motor: lexico, parser, expansion, builtins, coreutils, shell
+src/engine/     motor: lexico, parser, expansion, arith, builtins, coreutils, shell
 src/levels.js   definicion de las 32 misiones y sus comprobaciones
-src/ui/         interfaz (terminal, panel de misiones, Navegador)
+src/check.js    evaluacion de soluciones y progreso del alumno
+src/ui/         interfaz: terminal y panel de misiones
+src/main.js     monta la pagina
 scripts/        validacion de misiones y comparacion contra bash real
 tests/          tests unitarios, de interfaz y diferenciales
+shell-tmp/      arneses y volcados para comparar con bash (fuera de git)
 ```
 
 El motor esta separado de la interfaz a proposito: `src/engine/shell.js` es una
@@ -40,14 +48,19 @@ integro en Node para las pruebas.
 
 ## Como se valida una solucion
 
-Cada mision declara un contrato, no una cadena literal. Se admite:
+Cada mision declara un contrato, no una cadena literal. `src/check.js` lo
+ejecuta, y lo usan **tanto los tests como la interfaz**, asi que la respuesta que
+ve el alumno es la misma que comprueba la CI. Se admite:
 
-- `expected_output`: texto que debe aparecer en la salida.
-- `assertions`: `exit_code`, `stderr_contains` y estado del sistema de ficheros
-  (`exists`, `content`, `mode`, `lines`, `absent`).
+- `salidaEsperada`: texto que debe salir por stdout.
+- `comprobaciones`: `{ exit_code }`, `{ stderr_contains }`, `{ output_contains }`
+  y `{ fs: { path, exists, absent, content, lines, mode, target } }`.
+- Las modalidades especiales añaden `fallo` (Depuración), `auditoria` (Auditoría)
+  y `bloques` (Ensamblaje), que tienen su propio verificador en
+  `src/ui/panel.js`.
 
-El ejecutor de la interfaz enseña la solucion al instante, con la diferencia
-exacta, y guarda el progreso en `localStorage` con el prefijo `lxl_`.
+La interfaz enseña la diferencia exacta línea a línea y guarda el progreso en
+`localStorage` con el prefijo `lxl_`.
 
 ## Publicacion
 
