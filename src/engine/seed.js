@@ -40,6 +40,9 @@ export const BASE_TREE = [
     ['/etc/shadow', FILE, 0o640, 0, T('root:*:19000:0:99999:7:::\nagente:$6$hash$19000:0:99999:7:::\n')],
 
     ['/var', DIR, 0o755, 0],
+    // `/var/www/html` es del usuario agente: la mision 30 despliega ahi.
+    ['/var/www', DIR, 0o755, AGENT_UID],
+    ['/var/www/html', DIR, 0o755, AGENT_UID],
     ['/var/log', DIR, 0o755, 0],
     ['/var/log/app.log', FILE, 0o640, 0, T(
         '2026-01-31 08:00:01 INFO  arranque del servicio\n' +

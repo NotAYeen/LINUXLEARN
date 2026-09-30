@@ -74,6 +74,9 @@ export function readWord(s, start) {
     let lit = '';
     let i = start;
     let consumed = 0;
+    // `""` es una palabra valida aunque no tenga tramos: sin esto, el token
+    // seria nulo y el lexer dejaria la comilla suelta.
+    let citada = false;
 
     const flush = () => {
         if (lit !== '') { parts.push({ k: 'lit', v: lit, q: false }); lit = ''; }
@@ -101,12 +104,14 @@ export function readWord(s, start) {
             const end = s.indexOf("'", i + 1);
             if (end === -1) throw new ShellSyntax('unexpected EOF while looking for matching \'\'');
             push({ k: 'lit', v: s.slice(i + 1, end), q: true });
+            citada = true;
             take(end + 1 - i);
             continue;
         }
         if (c === '"') {
             const dq = readDoubleQuoted(s, i + 1);
             for (const p of dq.parts) push({ ...p, q: true });
+            citada = true;
             take(dq.end + 1 - i);
             continue;
         }
@@ -150,7 +155,7 @@ export function readWord(s, start) {
     }
 
     flush();
-    if (parts.length === 0) return null;
+    if (parts.length === 0 && !citada) return null;
     return { type: 'word', parts, raw: s.slice(start, start + consumed) };
 }
 

@@ -17,11 +17,14 @@ propio en JavaScript. Sin backend, sin WASM. Reloj congelado en
 | --- | --- |
 | 1. `errors.js`, `fs.js`, `seed.js` | HECHA (con `tests/fs.test.js`) |
 | 2. `lexer.js`, `parser.js`, `expansion.js` | HECHA (con `tests/parser.test.js` y `tests/expansion.test.js`) |
-| 3. `builtins.js` y `coreutils/` | **PARCIAL**: faltan ~35 comandos |
-| 4. `shell.js` | **NO EMPEZADA** (es el bloque critico) |
-| 5. `src/levels.js` + validadores | HECHA: 32 misiones, `npm run validate` en verde, forma cubierta por `tests/levels.test.js` (la ejecucion de soluciones espera a `shell.js`) |
-| 6. Interfaz, worker y estilos | **PARCIAL**: pagina de aterrizaje (`index.html`, `src/main.js`, `css/style.css`, `favicon.svg`) y build en verde; falta el terminal con historial/TAB/Ctrl-C y el panel de mision |
-| 7. Publicacion en GitHub Pages | Workflow listo; **falta crear el repo `NotAYeen/LINUXLEARN`, hacer push y activar Pages (`build_type: workflow`)** |
+| 3. `arith.js`, `builtins.js` y `coreutils/` | HECHA: 51 comandos registrados + `arith.js` para `$(( ))` |
+| 4. `shell.js` | HECHA: tuberias, redirecciones, funciones, bucles, `trap`, `set`, subshells |
+| 5. `src/levels.js` + validadores | HECHA: 32 misiones, validate en verde, `tests/levels.test.js` |
+| 6. Interfaz, panel de mision, estilos | HECHA: `src/main.js`, `src/ui/terminal.js`, `src/ui/panel.js`, `src/check.js`, `css/style.css`, `tests/ui.test.js` (jsdom) |
+| 7. Publicacion en GitHub Pages | HECHA: repo `NotAYeen/LINUXLEARN`, Pages desplegado |
+
+**Estado de la CI (local, en verde):** `validate` 32/32 misiones, `test` 89/89,
+`test:bash` 80/80 casos contra bash real, `build` correcto.
 
 ### Ficheros que ya existen y se pueden dar por buenos
 
@@ -39,25 +42,39 @@ propio en JavaScript. Sin backend, sin WASM. Reloj congelado en
   Negación `!` al inicio de una tubería (palabra, no operador: `echo !`
   sigue imprimiendo `!`). `case` sin `esac` lanza `ShellSyntax`.
 - `src/engine/registry.js` — registro de comandos (lee `COMANDOS` del barril).
-- `src/engine/coreutils/` — **23 comandos hechos** (grupo de ficheros):
-  `basename date dirname env false file hostname id ln mkdir printenv
-  readlink realpath rmdir sleep stat tar touch true which whoami yes`
-  más `regex.js` (ayuda compartida de regex POSIX→RegExp, hecha a medias por
-  el agente de grep/sed/awk).
-  Todos siguen el contrato de §2 y se prueban con
-  `node shell-tmp/harness.mjs <comando> ...`.
+- `src/engine/arith.js` — evaluador de `$(( ))` con la precedencia de bash.
+- `src/engine/builtins.js` — los builtins (`cd`, `export`, `set`, `read`,
+  `trap`, `source`, `alias`, `local`, `let`, `type`, `exit`, `:`...) y la clase
+  `ReturnSignal` para `return`.
+- `src/engine/shell.js` — el ejecutor: listas con `&&`/`||`, tuberias con cada
+  etapa en subshell, redirecciones (incluidos here-docs y `2>&1`), funciones con
+  `local`, bucles, `case`, `trap`, `set -euo pipefail`, presupuesto de pasos y
+  `crearSesion()` con `ejecutar`, `escribir`, `cd`, `reset`, `sugerencias`,
+  `prompt`, `interrumpir`.
+- `src/engine/coreutils/` — **51 comandos registrados**:
+  `awk basename bash cat chmod chown cp cut date dirname echo env false file find
+  grep head hostname id ln ls mkdir mv printenv printf pwd readlink realpath rm
+  rmdir sed seq sleep sort stat tail tar tee test touch tr true uniq wc which
+  whoami xargs yes`, más `io.js` (lectura de operandos compartida), `regex.js`
+  (regex POSIX→RegExp) e `index.js` (el barril).
+  Todos siguen el contrato de §2.
 - `src/levels.js` — las 32 misiones (`MODOS`, `DIFICULTADES`, `COMANDOS`,
   `misionPorId`).
-- `tests/` — `fs.test.js`, `parser.test.js`, `expansion.test.js`,
-  `levels.test.js` (48 pruebas, `npm test` en verde).
-- `index.html`, `src/main.js`, `css/style.css`, `favicon.svg` — aterrizaje
-  con el listado de misiones. `vite.config.js` usa `input: 'index.html'`
-  para que `dist/` salga con el HTML y `bundle.js` (sin eso no hay Pages).
+- `src/check.js` — evaluación de una respuesta de misión, compartida por la
+  interfaz y los tests, más el progreso en `localStorage` con prefijo `lxl_`.
+- `src/ui/terminal.js` — el terminal (historial, TAB con sugerencias, Ctrl-C,
+  Ctrl-L) **sin `innerHTML`**: cada línea es un nodo de texto.
+- `src/ui/panel.js` — el panel de misión con las cuatro modalidades
+  (Terminal, Depuración, Auditoría, Ensamblaje).
+- `src/main.js` — une terminal, panel y lista de misiones; es lo único que
+  arranca la página.
+- `tests/` — `fs`, `parser`, `expansion`, `levels`, `engine` y `ui` (89 pruebas,
+  jsdom para la interfaz).
+- `index.html`, `css/style.css`, `favicon.svg` — la página. `vite.config.js`
+  usa `input: 'index.html'` para que `dist/` salga con el HTML y `bundle.js`.
 - `scripts/validate-levels.mjs` — valida la forma de `src/levels.js`.
 - `scripts/diff-bash.mjs` + `scripts/casos-bash.mjs` — comparación
-  diferencial; hoy `CASOS = []` pasa en verde sin comparar nada.
-- `shell-tmp/harness.mjs` — arnés para probar un coreutils **aislado del
-  shell** (gitignored).
+  diferencial; hoy `CASOS` tiene 80 guiones, todos en verde contra bash.
 - `.github/workflows/ci.yml` — validate + test + diff-bash + build + Pages.
 
 ### Correcciones de motor hechas el 2026-09-28 (no deshacer)
@@ -81,7 +98,7 @@ Al pasar los tests a vitest salieron cuatro fallos reales del motor:
 
 ---
 
-## 2. Contrato de los comandos (NO cambiar sin revisar los 23 ya escritos)
+## 2. Contrato de los comandos (NO cambiar sin revisar los 51 ya escritos)
 
 ```js
 // src/engine/coreutils/<nombre>.js
@@ -102,9 +119,14 @@ export default {
     `walk`). Rutas relativas: `normalizePath(ctx.cwd, ruta)`.
   - `stdin`: string. `stdout`/`stderr`: `{ write(s) }` — nunca `console.log`.
   - `env`: variables exportadas. `cwd`: absoluto. `owner`: `{uid,gid}`.
-  - `shell`: `{ now, uid, gid, user, umask, vars, passwd, lanzar(argvArray),
-    lanzarGuion(texto) }` (los dos últimos aún NO existen; los implementa
-    `shell.js` y los usan `xargs`, `find -exec`, `bash`, `sh`).
+  - `shell`: `{ now, uid, gid, user, umask, vars, passwd, estado, lanzar(argvArray),
+    lanzarGuion(texto), cambiarCwd(ruta), definir(n, v), getVar(n), flujoEntrada }`.
+    `lanzar` y `lanzarGuion` los implementa `shell.js` y los usan `xargs`,
+    `find -exec`, `bash`, `sh` y `source`.
+  - `flujoEntrada`: el objeto vivo de entrada (lo consume `read` linea a
+    linea, que es lo que hace funcionar `while read l; do ...; done < f`).
+  - `comandoExterno(nombre)`, `builtin(nombre)` y `funcion(nombre)`: para que
+    `type` sepa qué es cada cosa.
 - Devuelve el código de salida o lanza `ShellError(mensaje, codigo)`. El
   mensaje ya lleva el nombre del programa en inglés, tal cual GNU
   (`cat: /nope: No such file or directory`). Los errores que no abortan el
@@ -112,7 +134,7 @@ export default {
 - Sin DOM, sin `Date.now()`, sin `Math.random()`, sin dependencias nuevas.
   Solo `../errors.js`, `../fs.js` y `../expansion.js` (para `globAPatron`).
 
-### Comandos que faltan (repartir entre agentes)
+### Comandos que se a�adieron en la sesion del 2026-09-28
 
 - **Grupo A (texto)**: `sort uniq cut tr tee head tail wc seq rev xargs`.
 - **Grupo C (regex pesada)**: `grep sed awk find` (empezado: `regex.js`).
@@ -123,7 +145,7 @@ export default {
 
 ---
 
-## 3. Contrato de `shell.js` (fase 4, pendiente)
+## 3. Contrato de `shell.js` (fase 4, implementado tal cual)
 
 ```js
 import { crearSesion } from './src/engine/shell.js';
@@ -192,62 +214,44 @@ Decisiones ya tomadas (mantenerlas):
 }
 ```
 
-`scripts/validate-levels.mjs` ya exige 32 misiones con `brief` ≥ 40,
-`objetivos`, `soluciones` y ids correlativos. **Falta**: que `comandos` se
-rellene (el validador avisa si un comando no está registrado) y que
-`tests/levels.test.js` ejecute cada `soluciones[0]` con el motor y compare
-con `salidaEsperada`/`comprobaciones` (una vez exista `shell.js`).
+`scripts/validate-levels.mjs` exige 32 misiones con `brief` ≥ 40, `objetivos`,
+`soluciones` y ids correlativos. `src/check.js` ya centraliza la evaluación:
+la usan `tests/ui.test.js` y `src/ui/panel.js`, así que la respuesta que ve el
+alumno es la misma que comprueba el test.
 
-`src/check.js` (pendiente) centralizará esa evaluación para que la interfaz
-y los tests usen lo mismo; la interfaz mostrará la diferencia exacta.
+`comandos: []` sigue vacio a proposito en las misiones (el campo avisa que no se
+usa todavia); se puede rellenar ya que el registro tiene 51 comandos.
 
 ---
 
 ## 5. Trabajo pendiente, en orden
 
-1. **Publicar** (lo primero, ya está todo en verde local):
-   ```bash
-   git add -A && git commit -m "LinuxLearn: motor, 32 misiones, tests y aterrizaje"
-   git branch -M main
-   gh repo create NotAYeen/LINUXLEARN --public --source . --push
-   gh api -X POST repos/NotAYeen/LINUXLEARN/pages -f build_type=workflow
-   gh run list --repo NotAYeen/LINUXLEARN      # CI + despliegue
-   ```
-   La URL queda `https://notayeen.github.io/LINUXLEARN/` (ya está en el
-   README y en el `canonical` de `index.html`).
-2. **Coreutils grupos A y C** (ver §2). Después registrarlos todos en
-   `src/engine/coreutils/index.js` (el barril está vacío: hoy el registro
-   no tiene NINGÚN comando y `validate-levels` marcaría cada `comandos`).
-3. **`src/engine/arith.js`** — evaluador de `$(( ))` (descenso recursivo).
-4. **`src/engine/builtins.js`** + **`src/engine/shell.js`** — ver §3.
-5. **`scripts/casos-bash.mjs`**: rellenar `CASOS` con guiones comparables
-   (nada que dependa de fechas, dueños o `env` real) y añadir el normalizado
-   de prefijo en `diff-bash.mjs`. Objetivo: `npm run test:bash` en verde
-   con >= 30 casos. Aprovechar para alinear los mensajes de sintaxis con
-   bash (ver §1).
-6. **`src/levels.js`**: rellenar `comandos`, y verificar cada
-   `salidaEsperada` contra bash real (dump del árbol con
-   `shell-tmp/volcar-semilla.mjs`; las soluciones candidatas ya se han
-   comprobado una a una con `shell-tmp/verificar-misiones.mjs`).
-7. **`src/check.js` + `tests/`**: centraliza la evaluación de misiones y
-   `tests/levels.test.js` pasa a ejecutar las 32 soluciones con el motor;
-   falta `engine.test.js` y `ui.test.js` (jsdom).
-8. **Interfaz**: terminal con historial/TAB/Ctrl-C, panel de misión, las 4
-   modalidades, progreso en `localStorage` con prefijo `lxl_`. **Sin
-   `innerHTML` con salida del shell** (regla 4 de AGENTS.md).
-9. **README**: ajustar la dirección de Pages si cambia.
+Todo lo de las fases 1 a 7 esta hecho y en verde. Queda pulir:
+
+1. **Rellenar `comandos`** de las 32 misiones con los comandos que aparecen en
+   `soluciones[0]` (ya se pueden leer del registro).
+2. **`awditoria.tokens`** de las misiones de Auditoria: son listas cortas de
+   ejemplo; conviene ampliar la del guion de la 26.
+3. **Mensajes de sintaxis**: alinearlos con bash real (ver nota en §1); ahora
+   usan el estilo de la casa (`expected 'fi'`), no el de GNU.
+4. **Extraer mas comparaciones diferenciales** a `scripts/casos-bash.mjs` (hoy
+   80 casos, todos en verde) ycubrir `tar`, `stat`, `id`, `date`.
+5. **Worker**: `shell.js` corre en el hilo principal con presupuesto de pasos.
+   Si algun dia se quiere aislar, `vite.config.js` ya tiene el bloque `worker`.
+6. **Ampliar el arbol** de la semilla si alguna mision lo pide (informes,
+   `respaldos/` esta vacio a proposito).
 
 ---
 
 ## 6. Cómo verificar
 
 ```bash
-npm test             # vitest
+npm test             # vitest (motor + interfaz, jsdom)
 npm run validate     # forma de las 32 misiones
 npm run test:bash    # diferencial contra bash real (Git Bash en Windows)
 npm run build        # dist/
-node shell-tmp/harness.mjs sort -n fichero    # coreutils aislado
-& 'C:\Program Files\Git\bin\bash.exe' -c 'sort -n fichero'   # referencia
+npm run dev          # servidor de desarrollo con recarga
+node shell-tmp/comparar-misiones.mjs   # las 32 soluciones contra bash
 ```
 
 En PowerShell los scripts Node en línea fallan por el escapado: crear un

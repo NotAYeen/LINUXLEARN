@@ -40,11 +40,18 @@ function localizarBash() {
     return null;
 }
 
-/** Deja el guion comparable: sin CR, sin espacios finales, sin codigo de color. */
+/**
+ * Deja el guion comparable: sin CR, sin espacios finales, sin codigo de color y
+ * sin el prefijo que bash pone a los errores del shell (`bash: line 1: ...`),
+ * que el emulador escribe como `bash: ...`.
+ */
 function normalizar(texto) {
     return String(texto ?? '')
         .replace(/\r\n/g, '\n')
         .replace(/\x1b\[[0-9;]*m/g, '')
+        .replace(/(^|\n)bash: (-c: )?line \d+: /g, '$1bash: ')
+        .replace(/(^|\n)\/usr\/bin\/bash: line \d+: /g, '$1bash: ')
+        .replace(/(^|\n)bash: line \d+: /g, '$1bash: ')
         .split('\n')
         .map((l) => l.replace(/[ \t]+$/, ''))
         .join('\n')

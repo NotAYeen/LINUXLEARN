@@ -567,7 +567,7 @@ function resolverGlob(ctx, patron) {
             if (segmento === '' || segmento === '.') { siguiente.push(base || '.'); continue; }
             if (segmento === '..') { siguiente.push(normalizePath(ctx.cwd, (base || '.') + '/..')); continue; }
             if (!/[?*[]/.test(segmento)) {
-                siguiente.push(base ? base + '/' + segmento : segmento);
+                siguiente.push(base === '/' ? '/' + segmento : base ? base + '/' + segmento : segmento);
                 continue;
             }
             for (const nombre of nombresQueCasan(ctx, base || '.', segmento)) {

@@ -1,83 +1,117 @@
+/**
+ * Punto de entrada de la interfaz: el terminal, el panel de mision y el
+ * progreso. Solo esta capa toca el DOM; el motor (src/engine) no lo hace nunca.
+ */
+
 import '../css/style.css';
-import { NIVELES, MODOS } from './levels.js';
+import { NIVELES, misionPorId } from './levels.js';
+import { leerProgreso, siguienteMision, registrarSuperada } from './check.js';
+import { montarTerminal, crear } from './ui/terminal.js';
+import { montarPanel } from './ui/panel.js';
 
-const el = (tag, attrs = {}, ...hijos) => {
-    const nodo = document.createElement(tag);
-    for (const [k, v] of Object.entries(attrs)) {
-        if (v === false || v === null || v === undefined) continue;
-        if (k === 'text') nodo.textContent = v;
-        else nodo.setAttribute(k, v);
-    }
-    for (const hijo of hijos) {
-        if (hijo === null || hijo === undefined) continue;
-        nodo.append(hijo);
-    }
-    return nodo;
-};
+/** Estructura de la pagina: barra lateral con misiones y zona principal. */
+function esqueleto() {
+    const raiz = document.getElementById('app');
+    raiz.textContent = '';
 
-const cuentaModos = () => {
-    const cuenta = {};
-    for (const n of NIVELES) cuenta[n.modo] = (cuenta[n.modo] || 0) + 1;
-    return cuenta;
-};
+    const cabecera = crear('header', { class: 'cabecera' },
+        crear('h1', { text: 'LinuxLearn' }),
+        crear('p', { class: 'lema', text: 'Practica la linea de ordenes de Linux en tu navegador.' })
+    );
 
-const raiz = document.getElementById('app');
-raiz.replaceChildren(
-    el('header', { class: 'cabecera' },
-        el('div', { class: 'marca' },
-            el('span', { class: 'prompt', text: 'agente@linuxlearn' }),
-            el('span', { class: 'ruta', text: ':~$' })
-        ),
-        el('h1', { text: 'LinuxLearn' })
-    ),
+    const lateral = crear('nav', { class: 'lateral', 'aria-label': 'Misiones' });
+    const panel = crear('section', { class: 'panel-mision' });
+    const terminal = crear('div', { class: 'terminal', 'aria-label': 'Terminal' });
 
-    el('main', { class: 'principal' },
-        el('section', { class: 'hero' },
-            el('p', { class: 'entradilla', text: 'Simulador de linea de ordenes de Linux que corre 100 % en tu navegador. El shell, los comandos y el sistema de ficheros estan escritos a mano en JavaScript: sin backend, sin emulacion, sin magia.' }),
-            el('p', { class: 'acciones' },
-                el('span', { class: 'comando', text: './empezar.sh' })
+    raiz.append(cabecera, crear('div', { class: 'cuerpo' }, lateral, crear('main', { class: 'principal' }, panel, terminal)));
+
+    return { raiz, lateral, panel, terminal };
+}
+
+/** Lista lateral con el estado de cada mision. */
+function pintarMisiones(contenedor, progreso, activa, alElegir) {
+    contenedor.textContent = '';
+    const completadas = Object.values(progreso.misiones).filter((m) => m.superada).length;
+
+    contenedor.append(crear('p', { class: 'progreso' },
+        crear('strong', { text: completadas + ' / ' + NIVELES.length }),
+        ' misiones superadas'
+    ));
+
+    const lista = crear('ol', { class: 'misiones' });
+    for (const mision of NIVELES) {
+        const hecha = Boolean(progreso.misiones[mision.id]?.superada);
+        const item = crear('li', {
+            class: 'mision' + (hecha ? ' hecha' : '') + (mision.id === activa ? ' activa' : '')
+        },
+            crear('button', { class: 'mision-boton', type: 'button' },
+                crear('span', { class: 'numero', text: String(mision.id) }),
+                crear('span', { class: 'nombre', text: mision.titulo }),
+                crear('span', { class: 'modo-mini', text: mision.modo })
             )
-        ),
+        );
+        item.querySelector('button').addEventListener('click', () => alElegir(mision.id));
+        lista.append(item);
+    }
+    contenedor.append(lista);
+}
 
-        el('section', { class: 'panel' },
-            el('h2', { text: 'El motor' }),
-            el('ul', { class: 'lista' },
-                el('li', { text: 'Shell propio: lexer, parser, expansion, tuberias, redirecciones, funciones, bucles, trap y set.' }),
-                el('li', { text: 'Errores identicos a los de GNU coreutils, en ingles, como en la terminal real.' }),
-                el('li', { text: 'Sistema de ficheros virtual sembrado de forma determinista: mismo arbol en cada sesion.' }),
-                el('li', { text: 'Pruebas diferenciales contra el bash de Ubuntu en CI: cada caso se ejecuta en los dos.' })
-            )
-        ),
+function arrancar() {
+    const { lateral, panel, terminal } = esqueleto();
+    const almacen = window.localStorage ?? null;
+    let progreso = leerProgreso(almacen);
+    let actual = progreso.ultimo ?? siguienteMision(progreso, NIVELES)?.id ?? 1;
 
-        el('section', { class: 'panel' },
-            el('h2', { text: 'Misiones' }),
-            el('div', { class: 'mallas' },
-                ...MODOS.map((modo) => el('div', { class: 'malla' },
-                    el('span', { class: 'cuenta', text: String(cuentaModos()[modo] || 0) }),
-                    el('span', { class: 'etiqueta', text: modo })
-                ))
-            ),
-            el('ul', { class: 'lista misiones' },
-                ...NIVELES.slice(0, 6).map((n) => el('li', {},
-                    el('span', { class: 'id', text: String(n.id).padStart(2, '0') }),
-                    el('span', { class: 'titulo', text: n.titulo }),
-                    el('span', { class: 'badges' },
-                        el('span', { class: 'modo', text: n.modo }),
-                        el('span', { class: 'dif', text: n.dificultad })
-                    )
-                ))
-            ),
-            el('p', { class: 'pie', text: `y ${NIVELES.length - 6} misiones mas: 32 en total, de Basico a Experto.` })
-        ),
+    const tty = montarTerminal(terminal, {
+        historialInicial: progreso.historial ?? [],
+        onEstado: ({ code }) => {
+            // El codigo de salida se muestra en la cabecera del panel: es la
+            // pista principal cuando algo falla.
+            const aviso = panel.querySelector('.codigo-salida');
+            if (aviso) {
+                aviso.textContent = 'codigo de salida: ' + code;
+                aviso.classList.toggle('error', code !== 0);
+            }
+        }
+    });
 
-        el('section', { class: 'panel estado' },
-            el('h2', { text: 'Estado del proyecto' }),
-            el('p', { text: 'Sistema de ficheros, lexer, parser, expansion y los primeros comandos ya estan escritos y probados. El registro de comandos, builtins, shell.js y la interfaz del terminal siguen en marcha: consulta PROGRESO.md del repositorio.' })
-        )
-    ),
+    function mostrar(id) {
+        const mision = misionPorId(id);
+        if (!mision) return;
+        actual = id;
+        progreso.ultimo = id;
+        progreso.historial = tty.historial();
+        progreso.misiones[id] = { ...progreso.misiones[id], abierta: true };
+        try { window.localStorage?.setItem('lxl_progreso', JSON.stringify(progreso)); } catch (e) { /* modo privado */ }
+        montarPanel(panel, mision, {
+            almacen,
+            sesion: undefined,
+            onSuperada: () => {
+                progreso = leerProgreso(almacen);
+                progreso.ultimo = id;
+                progreso.historial = tty.historial();
+                pintarMisiones(lateral, progreso, actual, mostrar);
+            }
+        });
+        pintarMisiones(lateral, progreso, actual, mostrar);
+    }
 
-    el('footer', { class: 'pie-pagina' },
-        el('a', { href: 'https://github.com/NotAYeen/LINUXLEARN', target: '_blank', rel: 'noopener', text: 'github.com/NotAYeen/LINUXLEARN' }),
-        el('span', { text: ' · hecho en el navegador, sin dependencias de servidor' })
-    )
-);
+    pintarMisiones(lateral, progreso, actual, mostrar);
+    mostrar(actual);
+    tty.enfocar();
+
+    // El terminal global para cuando el alumno escribe el comando de la mision.
+    document.addEventListener('keydown', (evento) => {
+        if (evento.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+            evento.preventDefault();
+            tty.enfocar();
+        }
+    });
+}
+
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arrancar);
+    else arrancar();
+}
+
+export { arrancar };
