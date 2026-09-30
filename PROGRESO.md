@@ -3,7 +3,11 @@
 Documento de reanudación. Se actualiza en cada sesión. **Léelo antes de tocar
 nada**, junto con `AGENTS.md`.
 
-Última actualización: 2026-09-28.
+Última actualización: 2026-09-30.
+
+**Estado en una línea:** las 7 fases están hechas y desplegadas; el trabajo
+abierto es pulido de interfaz (§5). CI en verde: 134 tests, 32 misiones,
+81 guiones contra bash real, Pages en vivo.
 
 ---
 
@@ -17,7 +21,7 @@ propio en JavaScript. Sin backend, sin WASM. Reloj congelado en
 | --- | --- |
 | 1. `errors.js`, `fs.js`, `seed.js` | HECHA (con `tests/fs.test.js`) |
 | 2. `lexer.js`, `parser.js`, `expansion.js` | HECHA (con `tests/parser.test.js` y `tests/expansion.test.js`) |
-| 3. `arith.js`, `builtins.js` y `coreutils/` | HECHA: 52 comandos registrados + `arith.js` para `$(( ))` |
+| 3. `arith.js`, `builtins.js` y `coreutils/` | HECHA: 53 comandos registrados + `arith.js` para `$(( ))` |
 | 4. `shell.js` | HECHA: tuberias, redirecciones, funciones, bucles, `trap`, `set`, subshells |
 | 5. `src/levels.js` + validadores | HECHA: 32 misiones, validate en verde, `tests/levels.test.js` |
 | 6. Interfaz, panel de mision, estilos | HECHA: terminal interactiva (se escribe y ejecuta ahi), panel con las 4 modalidades, `src/check.js`, estilos, `tests/ui.test.js` y `tests/sesion.test.js` |
@@ -63,8 +67,8 @@ Notas de infraestructura que costaron un rato:
   `local`, bucles, `case`, `trap`, `set -euo pipefail`, presupuesto de pasos y
   `crearSesion()` con `ejecutar`, `escribir`, `cd`, `reset`, `sugerencias`,
   `prompt`, `interrumpir`.
-- `src/engine/coreutils/` — **52 comandos registrados**:
-  `awk basename bash cat chmod chown cp cut date dirname echo env false file find
+- `src/engine/coreutils/` — **53 comandos registrados**:
+  `awk basename bash cat chmod chown clear cp cut date dirname echo env false file find
   grep head hostname id ln ls mkdir mv printenv printf pwd readlink realpath rev rm
   rmdir sed seq sleep sort stat tail tar tee test touch tr true uniq wc which
   whoami xargs yes`, más `io.js` (lectura de operandos compartida), `regex.js`
@@ -79,6 +83,14 @@ Notas de infraestructura que costaron un rato:
   sugerencias, Ctrl-C, Ctrl-L, pie con el código de salida y `$?`, y foco
   automático en cualquier clic. **Sin `innerHTML`**: cada línea es un nodo de
   texto (hay un test que lo comprueba con un `<img onerror>`).
+  API: `tty.alEjecutar = fn`, `tty.historial()`, `tty.ejecutar()`,
+  `tty.escribir(texto)`, `tty.reiniciar(historial)`, `tty.sesion` (getter),
+  `tty.texto()`, `tty.enfocar()`. El historial vive en la sesión del motor
+  (`crearSesion({ historial })`), que es la misma lista que imprime el builtin
+  `history` y la que usan las flechas: no hay dos historiales.
+  `tty.reiniciar()` crea una sesión nueva (árbol de ficheros intacto) y es lo
+  que llama el botón "reiniciar máquina". Las secuencias de escape que suelta
+  `clear` se traducen a borrar pantalla, en vez de pintarse.
 - `src/ui/panel.js` — el panel de misión con las cuatro modalidades
   (Terminal, Depuración, Auditoría, Ensamblaje). En la modalidad Terminal no
   escribe nada: se engancha a la terminal con `tty.alEjecutar` y **comprueba
@@ -102,8 +114,12 @@ Notas de infraestructura que costaron un rato:
   árbol de ficheros vuelve a su estado inicial, sin tocar el progreso),
   **rehacer misión**, **exportar/importar progreso** y **restablecer progreso**,
   que exige dos pulsaciones y explica el peligro en vez de usar un modal.
-- `src/main.js` — une terminal, panel y lista de misiones; es lo único que
-  arranca la página.
+  Devuelve `{ aviso, cancelaConfirmacion, sincroniza, compruebaAlmacenamiento,
+  guardaSesion, ... }` para poder probarlo con `click()`.
+- `src/main.js` — une terminal, panel, barra de acciones y lista de misiones;
+  es lo único que arranca la página. `arrancar()` no hace nada si no encuentra
+  `#app` (los tests la llaman a mano). Cablea
+  `tty.alEjecutar = (guion, resultado) => panelMision.alComando?.(...)`.
 - `tests/` — `fs`, `parser`, `expansion`, `levels`, `engine`, `ui` y `sesion`
   (134 pruebas; solo los dos últimos usan jsdom, el resto corre en node).
   `sesion.test.js` simula una sesión real de alumno: seis comandos escritos en
@@ -137,9 +153,60 @@ Al pasar los tests a vitest salieron cuatro fallos reales del motor:
    \`case' command on line 1`): alinearlos cuando `CASOS` de diff-bash
    cubra sintaxis.
 
+### Bugs reales encontrados y arreglados (no deshacer)
+
+Salieron al hacer la interfaz utilizable, no al hacer tests de motor. Varios
+llevaban semanas latentes y **ninguno lo cazaba el suite**: por eso ahora hay
+pruebas que montan la aplicación entera.
+
+1. **El historial no se restauraba nunca.** `main.js` guardaba
+   `progreso.historial` pero `leerProgreso` devolvía solo `{misiones, ultimo}`.
+   Al recargar la página las flechas empezaban vacías.
+2. **El progreso se escribía en `localStorage` a mano desde `main.js`**, con un
+   `try/catch` que se comía el error: con el almacenamiento lleno el alumno
+   veía "guardado" y estaba perdiendo progreso. Ahora solo escribe
+   `src/check.js` y `acciones.js` avisa cuando `guardarProgreso` devuelve
+   `false` (modo privado, cuota llena).
+3. **`registrarSuperada` pisaba el registro de la misión** (se comía
+   `abierta`).
+4. **`history` salía siempre vacío.** El historial solo se llevaba si se pasaba
+   `opciones.registrar`, y nadie la pasaba. Ahora `ejecutarGuion` registra por
+   defecto y los guiones internos (`fuente`/`source`, `lanzarGuion`/`bash -c`,
+   `eval`, `.bashrc`) pasan `registrar: false`, como en bash.
+5. **`clear` no existía** (daba `command not found`). Añadido con la secuencia
+   real de ncurses, comprobada con `clear | xxd` → `\x1b[H\x1b[2J\x1b[3J`.
+6. **El enganche del panel se leía un nivel más arriba** en `main.js`:
+   `montarPanel` devolvía `{ mision, zona, enganche }` y se hacía
+   `enganche.comandoEjecutado`, así que **el acierto automático no llegaba a
+   comprobarse en la página**. Los tests lo montaban a mano y pasaban. Ahora
+   devuelve `alComando` plano y `tests/sesion.test.js` arranca `main.js` de
+   verdad.
+7. **La CI de Ubuntu falló con el caso `clear`**: sin `TERM` el bash real
+   aborta con `TERM environment variable not set`. `diff-bash.mjs` fija
+   `TERM=xterm` porque el simulador *es* una terminal.
+8. **El corte de bucles infinitos tardaba 1 s y congelaba la página**; ahora se
+   corta antes con un mensaje claro y las tuberías sin fin tienen tope de
+   salida (256 KiB). `yes` sin argumentos imprimía líneas vacías en vez de `y`.
+
+### Decisiones de interfaz que ya estan tomadas
+
+- **La terminal es el sitio unico de trabajo.** No hay `textarea` para la
+  solución: se escribe en la terminal, se pulsa Enter y el panel comprueba ese
+  comando al momento.
+- **El acierto es automatico y silencioso mientras falla**: los dos primeros
+  intentos no dicen nada (la terminal ya enseña el error real) y a partir del
+  tercero aparece la diferencia línea a línea. Al acertar, botón de "siguiente
+  misión".
+- **El botón de comprobar sigue ahí**, pero solo como atajo para forzar la
+  pista; no hace falta para resolver.
+- **Nada de modales**: las acciones destructivas piden dos pulsaciones y
+  enseñan el texto del peligro.
+- **Restablecer progreso no reinicia la máquina y viceversa**: son botones
+  separados porque se pierden cosas distintas.
+
 ---
 
-## 2. Contrato de los comandos (NO cambiar sin revisar los 52 ya escritos)
+## 2. Contrato de los comandos (NO cambiar sin revisar los 53 ya escritos)
 
 ```js
 // src/engine/coreutils/<nombre>.js
@@ -199,6 +266,16 @@ sesion.sugerencias('gr');                   // para el TAB de la interfaz
 sesion.prompt();                            // 'agente@linuxlearn:~$ '
 sesion.reset();                             // vuelve al arranque
 ```
+
+Al recargar la página el terminal crea la sesión con el historial guardado:
+
+```js
+const sesion = crearSesion({ historial: ['ls -l', 'pwd'] });
+```
+
+Ese array es el mismo que imprime `history` y el que recorren las flechas: no
+hay dos historiales. Sin opciones, la lista arranca vacía, que es lo que hacen
+los tests y `evaluar()`.
 
 Decisiones ya tomadas (mantenerlas):
 
@@ -261,26 +338,54 @@ la usan `tests/ui.test.js` y `src/ui/panel.js`, así que la respuesta que ve el
 alumno es la misma que comprueba el test.
 
 `comandos: []` sigue vacio a proposito en las misiones (el campo avisa que no se
-usa todavia); se puede rellenar ya que el registro tiene 51 comandos.
+usa todavia); se puede rellenar ya que el registro tiene 53 comandos.
 
 ---
 
 ## 5. Trabajo pendiente, en orden
 
-Todo lo de las fases 1 a 7 esta hecho y en verde. Queda pulir:
+Todo lo de las fases 1 a 7 esta hecho y en verde. Queda pulido, y conviene
+mirar primero la interfaz porque es lo que nota el alumno.
 
-1. **Rellenar `comandos`** de las 32 misiones con los comandos que aparecen en
-   `soluciones[0]` (ya se pueden leer del registro).
-2. **`auditoria.tokens`** de las misiones de Auditoria: son listas cortas de
+### 5.1 Pulido de interfaz (lo que más se nota)
+
+1. **Panel de referencia de comandos**: los 53 comandos con su `synopsis` ya
+   están en el registro, así que es un listado que se genera. También sería un
+   `man` en el motor, si se quiere faithful (ojo con el formato de GNU).
+2. **Pantalla de fin de juego**: cuando `siguienteMision()` devuelve `null` no
+   pasa nada. Falta un cierre con el recuento y la opción de repasar.
+3. **Botones de "misión anterior / siguiente"** en el panel: ahora solo se navega
+   con la lista lateral.
+4. **Buscador en la lista de misiones** (32 ya son muchas).
+5. **Edición de línea estilo readline**: Ctrl+A, Ctrl+E, Ctrl+U, Ctrl+W. Es lo
+   que más se echa de menos de una terminal real, y es barato: el campo es un
+   `contenteditable`. Ctrl+R (búsqueda en el historial) sería el siguiente paso.
+6. **Tamaño de fuente ajustable** y un modo sin destellos.
+7. **Notas por misión** (un `textarea` que se guarda) y **modo examen** sin
+   pistas ni solución de referencia.
+
+### 5.2 Motor y contenido
+
+8. **Rellenar `comandos`** de las 32 misiones con los comandos de `soluciones[0]`.
+9. **`auditoria.tokens`** de las misiones de Auditoría: son listas cortas de
    ejemplo; conviene ampliar la del guion de la 26.
-3. **Mensajes de sintaxis**: alinearlos con bash real (ver nota en §1); ahora
-   usan el estilo de la casa (`expected 'fi'`), no el de GNU.
-4. **Extraer mas comparaciones diferenciales** a `scripts/casos-bash.mjs` (hoy
-   81 casos, todos en verde) y cubrir `tar`, `stat`, `id`, `date`, `ln`, `chmod`.
-5. **Worker**: `shell.js` corre en el hilo principal con presupuesto de pasos.
-   Si algun dia se quiere aislar, `vite.config.js` ya tiene el bloque `worker`.
-6. **Ampliar el arbol** de la semilla si alguna mision lo pide (informes,
-   `respaldos/` esta vacio a proposito).
+10. **Mensajes de sintaxis**: alinearlos con bash real (ver §1); ahora usan el
+    estilo de la casa (`expected 'fi'`), no el de GNU.
+11. **Más casos diferenciales** en `scripts/casos-bash.mjs` para `tar`, `stat`,
+    `id`, `date`, `ln`, `chmod` (los que no valen son los que dependen de
+    fechas o dueños reales: `ls -l`, `stat`, `date`).
+12. **Worker**: `shell.js` corre en el hilo principal con presupuesto de pasos.
+    Si algun dia se quiere aislar, `vite.config.js` ya tiene el bloque `worker`.
+13. **Ampliar el árbol** de la semilla si alguna misión lo pide (informes;
+    `respaldos/` está vacío a propósito).
+
+### 5.3 Lo que se aplaza a propósito
+
+- **Streaming en tuberías**: hoy cada etapa se ejecuta con la salida de la
+  anterior completa en memoria. Solo importa si alguna misión pide
+  `tail -f` o algo equivalente.
+- **Navegación por teclado completa** (rotabilidad, foco entre paneles): está
+  el foco visible y el foco automático al terminal, que es lo que se nota.
 
 ---
 
