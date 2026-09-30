@@ -20,11 +20,11 @@ propio en JavaScript. Sin backend, sin WASM. Reloj congelado en
 | 3. `arith.js`, `builtins.js` y `coreutils/` | HECHA: 52 comandos registrados + `arith.js` para `$(( ))` |
 | 4. `shell.js` | HECHA: tuberias, redirecciones, funciones, bucles, `trap`, `set`, subshells |
 | 5. `src/levels.js` + validadores | HECHA: 32 misiones, validate en verde, `tests/levels.test.js` |
-| 6. Interfaz, panel de mision, estilos | HECHA: `src/main.js`, `src/ui/terminal.js`, `src/ui/panel.js`, `src/check.js`, `css/style.css`, `tests/ui.test.js` (jsdom) |
+| 6. Interfaz, panel de mision, estilos | HECHA: terminal interactiva (se escribe y ejecuta ahi), panel con las 4 modalidades, `src/check.js`, estilos, `tests/ui.test.js` y `tests/sesion.test.js` |
 | 7. Publicacion en GitHub Pages | HECHA: repo `NotAYeen/LINUXLEARN`, Pages desplegado |
 
 **Estado de la CI (todo en verde, local y en GitHub Actions):** `validate`
-32/32 misiones, `test` 91/91, `test:bash` 79/79 casos contra bash real, `build`
+32/32 misiones, `test` 99/99, `test:bash` 80/80 casos contra bash real, `build`
 correcto y Pages desplegado en https://notayeen.github.io/LINUXLEARN/.
 
 Notas de infraestructura que costaron un rato:
@@ -76,19 +76,27 @@ Notas de infraestructura que costaron un rato:
   `misionPorId`).
 - `src/check.js` — evaluación de una respuesta de misión, compartida por la
   interfaz y los tests, más el progreso en `localStorage` con prefijo `lxl_`.
-- `src/ui/terminal.js` — el terminal (historial, TAB con sugerencias, Ctrl-C,
-  Ctrl-L) **sin `innerHTML`**: cada línea es un nodo de texto.
+- `src/ui/terminal.js` — el terminal: es **el sitio donde el alumno escribe y
+  ejecuta** (no hay un cuadro de texto aparte). Historial con flechas, TAB con
+  sugerencias, Ctrl-C, Ctrl-L, pie con el código de salida y `$?`, y foco
+  automático en cualquier clic. **Sin `innerHTML`**: cada línea es un nodo de
+  texto (hay un test que lo comprueba con un `<img onerror>`).
 - `src/ui/panel.js` — el panel de misión con las cuatro modalidades
-  (Terminal, Depuración, Auditoría, Ensamblaje).
+  (Terminal, Depuración, Auditoría, Ensamblaje). En la modalidad Terminal no
+  escribe nada: se engancha a la terminal con `tty.alEjecutar` y comprueba
+  **cada comando en cuanto se ejecuta**, distinguiendo tres casos (correcto, no
+  acierta, el comando falla).
 - `src/main.js` — une terminal, panel y lista de misiones; es lo único que
   arranca la página.
-- `tests/` — `fs`, `parser`, `expansion`, `levels`, `engine` y `ui` (91 pruebas;
-  solo `ui.test.js` usa jsdom, el resto corre en node).
+- `tests/` — `fs`, `parser`, `expansion`, `levels`, `engine`, `ui` y `sesion`
+  (99 pruebas; solo los dos últimos usan jsdom, el resto corre en node).
+  `sesion.test.js` simula una sesión real de alumno: seis comandos escritos en
+  la terminal, con errores, `cd` y acierto, y comprueba que el panel reacciona.
 - `index.html`, `css/style.css`, `favicon.svg` — la página. `vite.config.js`
   usa `input: 'index.html'` para que `dist/` salga con el HTML y `bundle.js`.
 - `scripts/validate-levels.mjs` — valida la forma de `src/levels.js`.
 - `scripts/diff-bash.mjs` + `scripts/casos-bash.mjs` — comparación
-  diferencial; hoy `CASOS` tiene 79 guiones, todos en verde contra bash.
+  diferencial; hoy `CASOS` tiene 80 guiones, todos en verde contra bash.
 - `.github/workflows/ci.yml` — validate + test + diff-bash + build + Pages.
 
 ### Correcciones de motor hechas el 2026-09-28 (no deshacer)
@@ -249,7 +257,7 @@ Todo lo de las fases 1 a 7 esta hecho y en verde. Queda pulir:
 3. **Mensajes de sintaxis**: alinearlos con bash real (ver nota en §1); ahora
    usan el estilo de la casa (`expected 'fi'`), no el de GNU.
 4. **Extraer mas comparaciones diferenciales** a `scripts/casos-bash.mjs` (hoy
-   79 casos, todos en verde) y cubrir `tar`, `stat`, `id`, `date`, `ln`, `chmod`.
+   80 casos, todos en verde) y cubrir `tar`, `stat`, `id`, `date`, `ln`, `chmod`.
 5. **Worker**: `shell.js` corre en el hilo principal con presupuesto de pasos.
    Si algun dia se quiere aislar, `vite.config.js` ya tiene el bloque `worker`.
 6. **Ampliar el arbol** de la semilla si alguna mision lo pide (informes,

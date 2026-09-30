@@ -13,7 +13,16 @@ JavaScript: no hay backend, ni WebAssembly, ni Pty.js, ni un Linux embebido.
   `set`, `trap`, funciones con `local`).
 - Errores con el mismo texto que produce Bash y las herramientas GNU.
 - Validación doble: reglas internas por misión y comparación diferencial
-  contra `bash` real en integración continua (79 guiones en verde).
+  contra `bash` real en integración continua (80 guiones en verde).
+
+## Cómo se trabaja
+
+Todo se hace **en la terminal simulada**: escribes el comando, pulsas Enter y
+ves su salida y sus errores en el momento, igual que en una terminal de verdad.
+El panel de la misión vigila lo que escribes y te dice si has acertado, con la
+diferencia línea a línea cuando te falta algo, y distingue entre "has fallado"
+y "el comando no funciona". El historial (flechas), el TAB para completar, Ctrl-C
+y Ctrl-L funcionan igual que en bash.
 
 ## Requisitos
 
@@ -24,7 +33,7 @@ npm install
 npm run dev      # servidor de desarrollo
 npm test         # tests del motor y de la interfaz
 npm run validate # comprueba la forma de las 32 misiones
-npm run test:bash # compara 79 guiones contra bash real
+npm run test:bash # compara 80 guiones contra bash real
 npm run build    # genera dist/
 npm run preview  # sirve dist/ tal cual se publicara
 ```
