@@ -13,7 +13,8 @@ export default {
     alias: [],
     synopsis: 'yes [TEXTO]...',
     run(ctx, argv) {
-        const line = argv.slice(1).join(' ') + '\n';
+        // Sin argumento, GNU yes imprime `y` en linea; con texto, lo repite.
+        const line = (argv.length > 1 ? argv.slice(1).join(' ') : 'y') + '\n';
         let out = '';
         for (let i = 0; i < 1024; i++) out += line;
         ctx.stdout.write(out);

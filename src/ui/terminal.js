@@ -33,13 +33,31 @@ export function montarTerminal(raiz, opciones = {}) {
     const prompt = crear('span', { class: 'prompt' });
     const campo = crear('span', { class: 'campo', contenteditable: 'plaintext-only', spellcheck: 'false' });
     const cursor = crear('span', { class: 'cursor' });
+    // Pie con el codigo de salida del ultimo comando: util para aprender y
+    // no ensucia la salida, como en una terminal de verdad.
+    const pie = crear('div', { class: 'terminal-pie' });
 
     lineaEntrada.append(prompt, campo, cursor);
-    raiz.append(pantalla, lineaEntrada);
+    raiz.append(pantalla, lineaEntrada, pie);
+
+    function actualizarEstado(resultado) {
+        pie.textContent = '';
+        pie.append(
+            crear('span', {
+                text: 'codigo de salida: ' + resultado.code,
+                class: resultado.code === 0 ? 'ok' : 'error'
+            }),
+            crear('span', { class: 'pista-pie', text: '  ·  $? vuelve a dar ' + resultado.code }),
+            crear('span', { class: 'conteo', text: '  ·  ' + historial.length + ' comandos' })
+        );
+    }
 
     let historial = opciones.historialInicial ?? [];
     let posicion = historial.length;
     let editable = '';
+    let ultimo = null;
+    /** Enganche del panel de mision: recibe cada comando ejecutado. */
+    let enganche = opciones.alEjecutar ?? null;
 
     // ---- salida -----------------------------------------------------------
 
@@ -68,24 +86,28 @@ export function montarTerminal(raiz, opciones = {}) {
     function ejecutar() {
         const guion = campo.textContent.trim();
         editable = '';
-        if (!guion) { pintarPrompt(); return; }
+        if (!guion) { pintarPrompt(); return null; }
         historial.push(guion);
         posicion = historial.length;
+        ultimo = guion;
         escribirLinea(sesion.prompt() + guion, 'entrada');
         campo.textContent = '';
+        let resultado;
         try {
-            const r = sesion.ejecutar(guion);
-            if (r.stdout) escribirBloque(r.stdout, 'salida');
-            if (r.stderr) escribirBloque(r.stderr, 'error');
-            opciones.onEstado?.({ code: r.code, stdout: r.stdout, stderr: r.stderr });
+            resultado = sesion.ejecutar(guion);
+            if (resultado.stdout) escribirBloque(resultado.stdout, 'salida');
+            if (resultado.stderr) escribirBloque(resultado.stderr, 'error');
         } catch (e) {
-            escribirBloque(String(e.message ?? e), 'error');
-            opciones.onEstado?.({ code: 1, stdout: '', stderr: String(e.message ?? e) });
+            const texto = String(e.message ?? e);
+            escribirBloque(texto, 'error');
+            resultado = { stdout: '', stderr: texto, code: 1 };
         }
         pintarPrompt();
-        opciones.onSalida?.(historial);
+        actualizarEstado(resultado);
+        opciones.onEstado?.({ ...resultado, guion });
+        enganche?.(guion, resultado);
+        return resultado;
     }
-
     // ---- teclado ----------------------------------------------------------
 
     campo.addEventListener('keydown', (evento) => {
@@ -172,7 +194,11 @@ export function montarTerminal(raiz, opciones = {}) {
 
     return {
         sesion,
+        /** El panel de la mision se engancha aqui para ver cada comando. */
+        set alEjecutar(fn) { enganche = fn; },
+        get alEjecutar() { return enganche; },
         historial: () => historial,
+        ultimoComando: () => ultimo,
         ejecutar,
         /** Escribe texto como si el alumno lo hubiera tecleado. */
         escribir(texto) {

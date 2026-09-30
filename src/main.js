@@ -23,7 +23,11 @@ function esqueleto() {
     const panel = crear('section', { class: 'panel-mision' });
     const terminal = crear('div', { class: 'terminal', 'aria-label': 'Terminal' });
 
-    raiz.append(cabecera, crear('div', { class: 'cuerpo' }, lateral, crear('main', { class: 'principal' }, panel, terminal)));
+    raiz.append(cabecera, crear('div', { class: 'cuerpo' }, lateral, crear('main', { class: 'principal' },
+        crear('h2', { class: 'rotulo-terminal', text: 'Terminal' }),
+        terminal,
+        panel
+    )));
 
     return { raiz, lateral, panel, terminal };
 }
@@ -61,18 +65,10 @@ function arrancar() {
     const almacen = window.localStorage ?? null;
     let progreso = leerProgreso(almacen);
     let actual = progreso.ultimo ?? siguienteMision(progreso, NIVELES)?.id ?? 1;
+    let enganche = null;
 
     const tty = montarTerminal(terminal, {
-        historialInicial: progreso.historial ?? [],
-        onEstado: ({ code }) => {
-            // El codigo de salida se muestra en la cabecera del panel: es la
-            // pista principal cuando algo falla.
-            const aviso = panel.querySelector('.codigo-salida');
-            if (aviso) {
-                aviso.textContent = 'codigo de salida: ' + code;
-                aviso.classList.toggle('error', code !== 0);
-            }
-        }
+        historialInicial: progreso.historial ?? []
     });
 
     function mostrar(id) {
@@ -83,9 +79,11 @@ function arrancar() {
         progreso.historial = tty.historial();
         progreso.misiones[id] = { ...progreso.misiones[id], abierta: true };
         try { window.localStorage?.setItem('lxl_progreso', JSON.stringify(progreso)); } catch (e) { /* modo privado */ }
-        montarPanel(panel, mision, {
+
+        // El panel se monta despues para poder engancharlo a la terminal: asi
+        // cada comando que el alumno ejecuta se comprueba al momento.
+        enganche = montarPanel(panel, mision, {
             almacen,
-            sesion: undefined,
             onSuperada: () => {
                 progreso = leerProgreso(almacen);
                 progreso.ultimo = id;
@@ -93,6 +91,7 @@ function arrancar() {
                 pintarMisiones(lateral, progreso, actual, mostrar);
             }
         });
+        tty.alEjecutar = (guion, resultado) => enganche?.comandoEjecutado?.(guion, resultado);
         pintarMisiones(lateral, progreso, actual, mostrar);
     }
 
@@ -100,12 +99,12 @@ function arrancar() {
     mostrar(actual);
     tty.enfocar();
 
-    // El terminal global para cuando el alumno escribe el comando de la mision.
-    document.addEventListener('keydown', (evento) => {
-        if (evento.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
-            evento.preventDefault();
-            tty.enfocar();
-        }
+    // Cualquier clic en la pagina devuelve el foco a la terminal: es la única
+    // forma de escribir, y si pierde el foco parece que no responde.
+    document.addEventListener('click', (evento) => {
+        const etiqueta = evento.target?.tagName ?? '';
+        if (['INPUT', 'TEXTAREA', 'BUTTON', 'A', 'SUMMARY'].includes(etiqueta)) return;
+        tty.enfocar();
     });
 }
 

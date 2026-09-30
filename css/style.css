@@ -65,6 +65,14 @@ body {
     min-width: 0;
 }
 
+.rotulo-terminal {
+    margin: 0;
+    font-size: 13px;
+    color: var(--acento);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
 /* ---------- lista de misiones ---------- */
 
 .lateral {
@@ -269,19 +277,75 @@ body {
 .codigo-salida { color: var(--tenue); font-size: 11px; margin-top: 8px; }
 .codigo-salida.error { color: var(--rojo); }
 
+/* ---------- seguimiento del panel (terminal) ---------- */
+
+.instruccion-terminal {
+    color: var(--tenue);
+    font-size: 13px;
+    margin: 10px 0 8px;
+}
+
+.seguimiento {
+    border: 1px dashed var(--borde);
+    border-radius: 7px;
+    padding: 8px 10px;
+    font-size: 13px;
+    color: var(--tenue);
+    background: #0a0d12;
+}
+
+.seguimiento p { margin: 2px 0; }
+.seguimiento.ok { border-style: solid; border-color: #1e5b30; color: var(--acento); background: #0b1a10; }
+.seguimiento.mal { border-style: solid; border-color: #4a3c1a; color: var(--ambar); background: #171208; }
+.seguimiento.error { border-style: solid; border-color: #4a2226; color: var(--rojo); background: #150c0d; }
+
+.referencia { margin-top: 12px; font-size: 12px; }
+.referencia summary { color: var(--tenue); cursor: pointer; }
+.referencia summary:hover { color: var(--azul); }
+.comando-referencia {
+    background: #0a0d12;
+    border: 1px solid var(--borde);
+    border-radius: 7px;
+    color: var(--acento);
+    padding: 8px 10px;
+    margin: 8px 0 0;
+    overflow-x: auto;
+    white-space: pre-wrap;
+}
+
 /* ---------- terminal ---------- */
 
 .terminal {
     background: #080a0e;
     border: 1px solid var(--borde);
     border-radius: 10px;
-    padding: 12px 14px;
-    height: 320px;
-    overflow-y: auto;
+    padding: 12px 14px 10px;
+    height: 380px;
+    display: flex;
+    flex-direction: column;
     font-size: 13px;
 }
 
-.pantalla { min-height: 240px; }
+.pantalla {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.terminal-pie {
+    border-top: 1px solid var(--borde);
+    margin-top: 8px;
+    padding-top: 6px;
+    color: var(--tenue);
+    font-size: 11px;
+    display: flex;
+    gap: 2px;
+    flex-wrap: wrap;
+}
+
+.terminal-pie .ok { color: var(--acento); }
+.terminal-pie .error { color: var(--rojo); }
+.terminal-pie .pista-pie, .terminal-pie .conteo { color: var(--tenue); }
 
 .linea { white-space: pre-wrap; word-break: break-word; }
 .linea.entrada { color: var(--texto); }
@@ -289,7 +353,16 @@ body {
 .linea.error { color: var(--rojo); }
 .linea.sugerencias { color: var(--tenue); font-size: 12px; }
 
-.linea-entrada { display: flex; gap: 6px; align-items: baseline; margin-top: 6px; }
+.linea-entrada {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    margin-top: 6px;
+    padding: 4px 0 2px;
+    border-top: 1px solid #14181f;
+}
+
+.terminal:focus-within { border-color: #1f3b5c; }
 .prompt { color: var(--acento); white-space: nowrap; }
 .campo {
     flex: 1;

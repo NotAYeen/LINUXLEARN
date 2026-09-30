@@ -38,8 +38,12 @@ import { evaluarEntero } from './arith.js';
 
 export { ReturnSignal };
 
-/** Tope de salida por etapa de tuberia: protege al navegador de un `yes | cat`. */
-const LIMITE_SALIDA = 1024 * 1024;
+/**
+ * Tope de salida por etapa de tuberia: protege al navegador de un `yes | cat`.
+ * Es tambien lo que corta un `while true; do echo x; done` sin dejar colgada la
+ * pagina: 256 KB se llenan deprisa y el comando se detiene solo.
+ */
+const LIMITE_SALIDA = 256 * 1024;
 /** Pasos de ejecucion antes de sospechar de un bucle infinito. */
 const PRESUPUESTO = 200000;
 /** Anidamiento maximo de tuberias, subshells y funciones. */
@@ -318,7 +322,9 @@ function manejarFallo(estado, e, io) {
         return e.codigo;
     }
     if (e instanceof BudgetError) {
-        io.stderr.texto += 'bash: lxl: tiempo de ejecucion agotado; quiza hay un bucle infinito\n';
+        // bash avisa de un trabajo demasiado largo con su propio prefijo; aqui
+        // el mensaje es el que vera el alumno, en la terminal simulada.
+        io.stderr.texto += 'bash: el comando ha tardado demasiado; quiza hay un bucle infinito sin fin\n';
         return EXIT_ERROR;
     }
     if (e instanceof InterruptSignal) {
@@ -412,7 +418,9 @@ function ejecutarPipeline(estado, pipeline, io, posicionales, opciones) {
 
         if (!ultima) {
             if (ioEtapa.stdout.texto.length > LIMITE_SALIDA) {
-                throw new ShellError('bash: la salida de la tuberia excede el limite del emulador', EXIT_ERROR);
+                // bash mata el proceso con SIGPIPE; aqui se corta la etapa y se
+                // avisa, que es lo que el alumno puede entender y corregir.
+                throw new BudgetError('salida demasiado larga en la tuberia');
             }
             entradaActual = ioEtapa.stdout.texto;
         }

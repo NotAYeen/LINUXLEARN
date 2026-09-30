@@ -68,6 +68,9 @@ export const CASOS = [
     { nombre: 'seq paso', guion: 'seq 1 2 9' },
     { nombre: 'seq separador', guion: 'seq -s, 1 3' },
     { nombre: 'seq ancho', guion: 'seq -w 8 10' },
+    { nombre: 'yes con head', guion: 'yes | head -n 3' },
+    // El corte de bucles infinitos es propio del emulador (bash real se
+    // quedaria colgado), asi que se prueba en tests/engine.test.js.
     // `tee f | cat f` es una carrera (cat puede abrir antes de que tee cree el
     // fichero), asi que aqui se espera a que tee termine.
     { nombre: 'tee', guion: 'echo secreto | tee copiado.txt > /dev/null; cat copiado.txt', archivos: ARBOL },

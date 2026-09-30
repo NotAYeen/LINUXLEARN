@@ -82,7 +82,12 @@ describe('terminal', () => {
 
 describe('panel de mision', () => {
     let raiz;
-    beforeEach(() => { raiz = document.createElement('div'); document.body.append(raiz); });
+    let terminalRaiz;
+    beforeEach(() => {
+        raiz = document.createElement('div');
+        terminalRaiz = document.createElement('div');
+        document.body.append(raiz, terminalRaiz);
+    });
 
     it('muestra titulo, modo, dificultad y objetivos', () => {
         montarPanel(raiz, misionPorId(1));
@@ -91,24 +96,80 @@ describe('panel de mision', () => {
         expect(raiz.querySelectorAll('.objetivos li').length).toBeGreaterThan(0);
     });
 
-    it('la modalidad Terminal comprueba la solucion', () => {
+    it('la modalidad Terminal comprueba lo que se ejecuta en la terminal', () => {
         const mision = misionPorId(1);
-        let veredicto = null;
-        montarPanel(raiz, mision, { onSuperada: () => { veredicto = 'superada'; } });
-        const campo = raiz.querySelector('.campo-solucion');
-        campo.value = mision.soluciones[0];
-        raiz.querySelector('.boton.comprobar').click();
-        expect(raiz.querySelector('.veredicto').className).toContain('ok');
-        expect(veredicto).toBe('superada');
+        let superada = null;
+        const { enganche } = montarPanel(raiz, mision, { onSuperada: (id) => { superada = id; } });
+
+        // Al abrir la mision el panel espera a que el alumno escriba.
+        expect(raiz.querySelector('.seguimiento').textContent).toContain('terminal');
+        // No hay textarea: el comando se escribe en la terminal, no en un cuadro.
+        expect(raiz.querySelector('.campo-solucion')).toBeNull();
+
+        enganche.comandoEjecutado(mision.soluciones[0]);
+        expect(raiz.querySelector('.seguimiento').className).toContain('ok');
+        expect(superada).toBe(mision.id);
     });
 
-    it('un comando equivocado no pasa', () => {
+    it('un comando equivocado no pasa y explica la diferencia', () => {
+        const mision = misionPorId(1);
+        const { enganche } = montarPanel(raiz, mision);
+        enganche.comandoEjecutado('ls /tmp');
+        expect(raiz.querySelector('.seguimiento').className).toContain('mal');
+        expect(raiz.querySelector('.seguimiento').textContent).toMatch(/Todavia no/);
+    });
+
+    it('un comando que falla se distingue de uno que no acierta', () => {
+        const mision = misionPorId(1);
+        const { enganche } = montarPanel(raiz, mision);
+        enganche.comandoEjecutado('ordeninventada');
+        expect(raiz.querySelector('.seguimiento').className).toContain('error');
+    });
+
+    it('el boton comprueba el ultimo comando escrito en la terminal', () => {
+        const mision = misionPorId(1);
+        const tty = montarTerminal(terminalRaiz, { alEjecutar: null });
+        montarPanel(raiz, mision);
+        tty.escribir(mision.soluciones[0]);
+        tty.ejecutar();
+        // El panel ya no esta enganchado (test suelto), pero el boton existe.
+        expect(raiz.querySelector('.boton.comprobar').textContent).toContain('ultimo comando');
+    });
+
+    it('la solucion de referencia se puede desplegar', () => {
         const mision = misionPorId(1);
         montarPanel(raiz, mision);
-        const campo = raiz.querySelector('.campo-solucion');
-        campo.value = 'ls /tmp';
-        raiz.querySelector('.boton.comprobar').click();
-        expect(raiz.querySelector('.veredicto').className).toContain('mal');
+        const ref = raiz.querySelector('.referencia');
+        expect(ref.querySelector('.comando-referencia').textContent).toBe(mision.soluciones[0]);
+    });
+
+    it('integracion: la terminal manda al panel lo que se ejecuta', () => {
+        const mision = misionPorId(1);
+        const tty = montarTerminal(terminalRaiz, {});
+        const { enganche } = montarPanel(raiz, mision);
+        // Asi es como lo conecta main.js.
+        tty.alEjecutar = (guion) => enganche.comandoEjecutado(guion);
+
+        tty.escribir('ls');
+        tty.ejecutar();
+        expect(raiz.querySelector('.seguimiento').className).toContain('mal');
+        expect(tty.texto()).toContain('respaldos');
+
+        tty.escribir(mision.soluciones[0]);
+        tty.ejecutar();
+        expect(raiz.querySelector('.seguimiento').className).toContain('ok');
+        expect(tty.ultimoComando()).toBe(mision.soluciones[0]);
+    });
+
+    it('el pie de la terminal muestra el codigo de salida', () => {
+        const tty = montarTerminal(terminalRaiz, {});
+        tty.escribir('true');
+        tty.ejecutar();
+        expect(terminalRaiz.querySelector('.terminal-pie').textContent).toContain('codigo de salida: 0');
+        tty.escribir('false');
+        tty.ejecutar();
+        expect(terminalRaiz.querySelector('.terminal-pie').textContent).toContain('codigo de salida: 1');
+        expect(terminalRaiz.querySelector('.terminal-pie .error')).toBeTruthy();
     });
 
     it('la modalidad Depuracion muestra el comando roto y su salida', () => {

@@ -72,7 +72,7 @@ export function montarPanel(raiz, mision, opciones = {}) {
     pistas.append(botonPista);
 
     const construir = MODALIDADES[mision.modo] ?? montarTerminal;
-    construir(zona, mision, {
+    const enganche = construir(zona, mision, {
         ...opciones,
         alEvaluar: (resultado) => {
             veredicto.textContent = '';
@@ -88,37 +88,75 @@ export function montarPanel(raiz, mision, opciones = {}) {
                 if (resultado.stderr) veredicto.append(crear('pre', { class: 'veredicto-error', text: resultado.stderr }));
             }
         }
-    });
+    }) ?? {};
 
-    return { mision, zona };
-}
+    // El veredicto general solo aparece cuando la modalidad ya tiene su propio
+    // mensaje (Ensamblaje, Auditoria): en Terminal el seguimiento va junto al
+    // boton, mas cerca de donde el alumno esta mirando.
+    if (!enganche.comandoEjecutado) veredicto.hidden = true;
 
-/** Terminal: un campo donde escribir el comando y un boton de comprobar. */
-function montarTerminal(zona, mision, opciones) {
-    const campo = crear('textarea', { class: 'campo-solucion', rows: 2, spellcheck: 'false' });
-    const boton = crear('button', { class: 'boton comprobar', type: 'button', text: 'Comprobar' });
-    const errores = crear('pre', { class: 'error-solucion' });
-
-    boton.addEventListener('click', () => {
-        const resultado = evaluar(mision, campo.value, { sesion: opciones.sesion });
-        errores.textContent = resultado.stderr ?? '';
-        opciones.alEvaluar?.(resultado);
-    });
-
-    zona.append(
-        crear('label', { class: 'rotulo', for: 'solucion', text: 'Escribe el comando:' }),
-        campo,
-        crear('div', { class: 'acciones' }, boton),
-        errores
-    );
-    campo.id = 'solucion-' + mision.id;
-    campo.focus();
-    return campo;
+    return { mision, zona, enganche };
 }
 
 /**
- * Depuracion: se muestra el comando roto y su salida. El alumno puede
- * escribir el comando corregido o la explicacion; ambas se comprueban.
+ * Terminal: el alumno escribe en la terminal de abajo, no en un cuadro aparte.
+ * Aqui solo se leen los comandos que se ejecutan y se dice si la mision esta
+ * superada, con la diferencia exacta cuando falla.
+ */
+function montarTerminal(zona, mision, opciones) {
+    const estado = crear('div', { class: 'seguimiento' });
+    const boton = crear('button', { class: 'boton comprobar', type: 'button', text: 'Comprobar el ultimo comando' });
+    const referencia = crear('details', { class: 'referencia' },
+        crear('summary', { text: 'Ver la solucion de referencia' }),
+        crear('pre', { class: 'comando-referencia', text: mision.soluciones?.[0] ?? '' })
+    );
+
+    let ultimo = null;
+
+    /** Comprueba el ultimo comando que se ejecuto en la terminal. */
+    function comprobar(guion) {
+        if (!guion) {
+            estado.className = 'seguimiento esperando';
+            estado.textContent = 'Escribe el comando en la terminal de abajo y pulsa Enter.';
+            return;
+        }
+        const resultado = evaluar(mision, guion, { sesion: opciones.sesion });
+        estado.textContent = '';
+        estado.className = 'seguimiento ' + (resultado.correcto ? 'ok' : (resultado.codigo === 0 ? 'mal' : 'error'));
+        if (resultado.correcto) {
+            estado.append(crear('strong', { text: 'Correcto. ' }));
+            estado.append(document.createTextNode('La orden que has escrito es la que buscabamos.'));
+        } else if (resultado.codigo !== 0) {
+            estado.append(crear('strong', { text: 'Ese comando falla. ' }));
+            estado.append(document.createTextNode('Mira el aviso que ha salido en la terminal y prueba otra vez.'));
+        } else {
+            estado.append(crear('strong', { text: 'Todavia no. ' }));
+            for (const detalle of resultado.detalles) estado.append(crear('p', { text: detalle.texto }));
+        }
+        opciones.alEvaluar?.(resultado);
+    }
+
+    boton.addEventListener('click', () => comprobar(ultimo));
+
+    zona.append(
+        crear('p', { class: 'instruccion-terminal' },
+            'Escribe el comando en la terminal de abajo y pulsa Enter: veras la salida real, con sus errores, en cuanto lo ejecutes.'
+        ),
+        estado,
+        crear('div', { class: 'acciones' }, boton),
+        referencia
+    );
+    comprobar(null);
+
+    // Devuelve el enganche que `main.js` usa para escuchar la terminal.
+    return {
+        comandoEjecutado(guion) { ultimo = guion; comprobar(guion); }
+    };
+}
+
+/**
+ * Depuracion: se muestra el comando roto y su salida. El alumno lo ejecuta en
+ * la terminal, ve el fallo y escribe aqui el comando corregido o su explicacion.
  */
 function montarDepuracion(zona, mision, opciones) {
     const fallo = mision.fallo ?? {};
@@ -129,6 +167,9 @@ function montarDepuracion(zona, mision, opciones) {
         crear('p', { class: 'fallo-salida' },
             crear('strong', { text: 'Y da esta salida: ' }),
             crear('code', { text: fallo.salida ?? '' })
+        ),
+        crear('p', { class: 'instruccion-terminal' },
+            'Ejecutalo en la terminal de abajo para verlo en directo, y despues escribe aqui el comando corregido o explica que pasa.'
         )
     );
 
@@ -138,8 +179,8 @@ function montarDepuracion(zona, mision, opciones) {
 
     boton.addEventListener('click', () => {
         const escrito = campo.value.trim();
-        // Se acepta el comando corregido (cualquiera que no falle) o una
-        // explicacion en texto libre que mencione la causa.
+        // Se acepta el comando corregido (si no falla) o una explicacion en
+        // texto libre que mencione la causa.
         const resultado = evaluar(mision, escrito, { sesion: opciones.sesion });
         const explicacion = esExplicacion(escrito, fallo);
         const final = explicacion
@@ -150,6 +191,7 @@ function montarDepuracion(zona, mision, opciones) {
     });
 
     zona.append(campo, crear('div', { class: 'acciones' }, boton), errores);
+    return { campo };
 }
 
 /** Una respuesta en prosa cuenta si nombra el comando o el sintoma del fallo. */

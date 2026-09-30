@@ -178,7 +178,16 @@ describe('shell: protecciones', () => {
     it('corta los bucles infinitos con un presupuesto', () => {
         const r = correr('while true; do echo x; done');
         expect(r.code).toBe(1);
-        expect(r.stderr).toMatch(/bucle infinito/);
+        expect(r.stderr).toMatch(/tardado demasiado|bucle infinito/);
+        // Y no tarda lo que haria falta para colgar la pagina.
+        const t0 = Date.now();
+        correr('while true; do echo x; done');
+        expect(Date.now() - t0).toBeLessThan(4000);
+    });
+
+    it('corta las tuberías que no acaban nunca', () => {
+        const r = correr('yes | head -n 3');
+        expect(r.stdout).toBe('y\ny\ny\n');
     });
 
     it('set -e detiene el guion', () => {
