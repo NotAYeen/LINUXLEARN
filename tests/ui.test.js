@@ -1,3 +1,10 @@
+/**
+ * @vitest-environment jsdom
+ *
+ * Este es el unico fichero que necesita DOM: monta el terminal y el panel de
+ * mision sobre un documento de verdad. Se declara aqui el entorno para no
+ * obligar a todo `npm test` a levantar jsdom.
+ */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { montarTerminal, crear } from '../src/ui/terminal.js';
 import { montarPanel, desordenar } from '../src/ui/panel.js';

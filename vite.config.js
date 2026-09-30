@@ -36,12 +36,10 @@ export default defineConfig({
       }
     }
   },
-  // `npm test` corre en jsdom: los tests de interfaz (tests/ui.test.js) montan
-  // el terminal y el panel de mision sobre un DOM de verdad. El pool de hilos
-  // es necesario porque jsdom no arranca dentro de un fork en Windows.
+  // `npm test` corre en node por defecto (rapido y sin DOM) y el unico test
+  // que necesita DOM declara arriba `@vitest-environment jsdom`, que crea su
+  // propio entorno sin depender del pool.
   test: {
-    environment: 'jsdom',
-    pool: 'threads',
     include: ['tests/**/*.test.js']
   }
 });
