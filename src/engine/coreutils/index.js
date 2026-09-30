@@ -31,6 +31,7 @@ import printf from './printf.js';
 import pwd from './pwd.js';
 import readlink from './readlink.js';
 import realpath from './realpath.js';
+import rev from './rev.js';
 import rm from './rm.js';
 import rmdir from './rmdir.js';
 import sed from './sed.js';
@@ -55,6 +56,6 @@ import yes from './yes.js';
 export const COMANDOS = [
     awk, bash, basename, cat, chmod, chown, cp, cut, date, dirname, echo, env,
     comandoFalse, file, find, grep, head, hostname, id, ln, ls, mkdir, mv, printenv,
-    printf, pwd, readlink, realpath, rm, rmdir, sed, seq, sleep, sort, stat, tail, tar,
-    tee, test, touch, tr, comandoTrue, uniq, wc, which, whoami, xargs, yes
+    printf, pwd, readlink, realpath, rev, rm, rmdir, sed, seq, sleep, sort, stat, tail,
+    tar, tee, test, touch, tr, comandoTrue, uniq, wc, which, whoami, xargs, yes
 ];

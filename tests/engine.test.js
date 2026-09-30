@@ -34,6 +34,20 @@ describe('shell: ordenes simples y tuberias', () => {
         expect(correr('cat /noexiste').code).toBe(1);
     });
 
+    it('invierte cada linea con rev', () => {
+        expect(correr('echo primera | rev').stdout).toBe('aremirp\n');
+        expect(correr('rev proyecto/notas.txt | head -n 1').stdout)
+            .toBe('orerbef ed emrofni le rasiver :ODOT\n');
+    });
+
+    it('tee escribe en el fichero y tambien por la salida', () => {
+        // El caso de diff-bash de `tee` es una carrera (tee f | cat f), asi que
+        // aqui se comprueba por separado que tee escribe de verdad.
+        const sesion = crearSesion();
+        expect(sesion.ejecutar('echo secreto | tee /tmp/tee-check.txt').stdout).toBe('secreto\n');
+        expect(sesion.ejecutar('cat /tmp/tee-check.txt').stdout).toBe('secreto\n');
+    });
+
     it('los operadores && y || cortocircuitan', () => {
         expect(correr('true && echo si').stdout).toBe('si\n');
         expect(correr('false && echo si').stdout).toBe('');

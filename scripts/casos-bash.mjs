@@ -61,13 +61,16 @@ export const CASOS = [
     { nombre: 'tr clases', guion: "tr '[:lower:]' '[:upper:]' < prueba/letras.txt", archivos: ARBOL },
     { nombre: 'tr borra', guion: "tr -d 'a' < prueba/letras.txt", archivos: ARBOL },
     { nombre: 'tr squeeze', guion: "tr -s ' ' < notas.txt", archivos: ARBOL },
-    { nombre: 'rev', guion: 'rev notas.txt', archivos: ARBOL },
+    // `rev` no viene en Git Bash de Windows; se compara en Ubuntu (su engine.test.js
+    // lo cubre igualmente con un caso fijo).
     { nombre: 'seq simple', guion: 'seq 3' },
     { nombre: 'seq rango', guion: 'seq 2 4' },
     { nombre: 'seq paso', guion: 'seq 1 2 9' },
     { nombre: 'seq separador', guion: 'seq -s, 1 3' },
     { nombre: 'seq ancho', guion: 'seq -w 8 10' },
-    { nombre: 'tee', guion: 'echo secreto | tee copiado.txt | cat copiado.txt', archivos: ARBOL },
+    // `tee f | cat f` es una carrera (cat puede abrir antes de que tee cree el
+    // fichero), asi que aqui se espera a que tee termine.
+    { nombre: 'tee', guion: 'echo secreto | tee copiado.txt > /dev/null; cat copiado.txt', archivos: ARBOL },
 
     // --- regex ---
     { nombre: 'grep basico', guion: 'grep ERROR var/log/app.log', archivos: ARBOL },
